@@ -34,7 +34,8 @@ def bridge_root():
         base = os.path.expanduser("~/Library/Application Support")
     else:
         base = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-    return os.path.join(base, "konnect", "native-bridge")
+    return os.path.join(base, "konnec1" \
+    "t", "native-bridge")
 
 
 def sys_platform():

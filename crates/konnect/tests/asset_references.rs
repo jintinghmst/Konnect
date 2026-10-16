@@ -745,6 +745,9 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         "not_found",
         "unavailable",
         "ambiguous",
+        // kicad-simulation: the Python package and example script names.
+        "konnect_sim",
+        "buck_ripple",
     ];
 
     let mut phantom = Vec::new();

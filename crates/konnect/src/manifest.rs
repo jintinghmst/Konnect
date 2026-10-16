@@ -108,6 +108,14 @@ pub const SKILLS: &[SkillManifest] = &[
         content: include_str!("../assets/skills/kicad-library/SKILL.md"),
         references: &[],
     },
+    SkillManifest {
+        name: "kicad-simulation",
+        content: include_str!("../assets/skills/kicad-simulation/SKILL.md"),
+        references: &[(
+            "simulation-methods.md",
+            include_str!("../assets/skills/kicad-simulation/references/simulation-methods.md"),
+        )],
+    },
 ];
 
 // ─── Agents ──────────────────────────────────────────────────────────────────
