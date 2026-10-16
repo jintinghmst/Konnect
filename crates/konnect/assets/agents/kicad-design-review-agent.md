@@ -66,7 +66,10 @@ Execute in this order — do not skip steps:
 
 **Phase 4: Best Practice Checks**
 - Pull-ups on open-drain buses (I2C, reset lines)
-- Series resistors on high-speed signals where needed
+- High-speed nets: termination matches driver, receiver and edge rate;
+  continuous return path; 3W spacing for clocks. Follow the High-Speed /
+  Signal Integrity section of the review checklist, and mark SI checks that
+  need simulation or measurement `BLOCKED` when that evidence is absent
 - Test points on critical signals
 - Mounting holes and board outline present
 - Fiducials for pick-and-place

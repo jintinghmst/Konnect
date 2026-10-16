@@ -17,6 +17,7 @@
 - [ ] Unused op-amp inputs tied to known state
 - [ ] Crystal load caps match crystal specification
 - [ ] ADC reference has dedicated decoupling
+- [ ] High-speed nets identified by edge rate; termination (series, parallel or AC) chosen from driver, receiver and edge rate
 
 ### Protection
 - [ ] ESD protection on external-facing interfaces (USB, Ethernet, GPIO headers)
@@ -42,10 +43,22 @@
 ### Routing
 - [ ] No unrouted nets (ratsnest clear)
 - [ ] Power traces adequately sized for current
-- [ ] Differential pairs length-matched (USB, Ethernet)
 - [ ] No acute angles on traces (acid traps)
 - [ ] Via-in-pad only where needed (adds cost)
 - [ ] Ground pour on back (or both sides)
+
+### High-Speed / Signal Integrity
+See `kicad-pcb/references/high-speed-design.md`.
+- [ ] Stackup, reference-plane assignment, channel budget and impedance targets recorded before layout
+- [ ] Controlled-impedance nets assigned to a netclass whose width/gap came from a field solver on the ordered stackup
+- [ ] No fast net crosses a plane split or void; every layer change has a nearby return path
+- [ ] Sensitive nets on internal layers beside a reference plane; short, with few vias
+- [ ] Clocks and sensitive nets at least 3× trace width from neighbours; aggressors separated from victims
+- [ ] Pair skew and lengths within the interface specification (sum `query_traces` segments)
+- [ ] Bypass capacitors close to the power pins they serve; planes can supply transient current
+- [ ] Test points on fast nets are few and planned (they change impedance)
+- [ ] Post-layout evidence: crosstalk check and eye/timing margin, or the verdict is `INCOMPLETE`
+- [ ] For FC-BGA devices: package model (S-parameters or IBIS package data) obtained from the vendor
 
 ### DFM (Design for Manufacturing)
 - [ ] All traces/spaces meet fab house minimums

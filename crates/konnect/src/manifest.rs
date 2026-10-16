@@ -69,6 +69,10 @@ pub const SKILLS: &[SkillManifest] = &[
                 "design-rules.md",
                 include_str!("../assets/skills/kicad-pcb/references/design-rules.md"),
             ),
+            (
+                "high-speed-design.md",
+                include_str!("../assets/skills/kicad-pcb/references/high-speed-design.md"),
+            ),
         ],
     },
     SkillManifest {

@@ -33,24 +33,18 @@ a candidate until it is written to the project and passes DRC.
 
 ## Controlled impedance
 
-Obtain the actual stackup before choosing geometry. An external microstrip and
-an internal stripline have different fields; an internal conductor is not a
-microstrip. A differential pair additionally depends on spacing, reference
-planes, copper thickness, dielectric properties, solder mask, and the
-fabricator's impedance-control process.
+Which nets need controlled impedance, and how to route them, is covered in
+[`high-speed-design.md`](high-speed-design.md): decide by edge rate, fix the
+stackup and reference planes at architecture stage, and verify against a
+channel budget.
 
-Use a field solver or the fabricator's stackup calculator. Record:
-
-- target single-ended or differential impedance and tolerance;
-- layer and reference plane(s);
-- dielectric thickness and material assumptions;
-- copper thickness, finished trace width, and etch assumptions;
-- pair spacing and solder-mask treatment; and
-- solver/tool version and result.
-
-Apply the solved width and gap to the project netclass. Re-solve whenever the
-stackup or fabricator changes, and verify the ordered impedance service matches
-the calculation.
+To size the geometry, read the live stackup with `get_board_stackup`. An
+external microstrip and an internal stripline have different fields; an
+internal conductor is not a microstrip. Solve width (and pair gap) with a
+field solver or the fabricator's stackup calculator, record the target
+impedance and tolerance, layer, reference plane, solver and result, then write
+the values into a project netclass. A changed laminate, stackup or fabricator is a
+technical change: re-solve and re-verify.
 
 ## Vias
 

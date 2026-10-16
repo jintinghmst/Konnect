@@ -83,6 +83,9 @@ Always call `get_active_toolsets()` first to see what is already loaded.
   the required calculation inputs and acceptance record; it is not a lookup table.
 - Read [`references/design-rules.md`](references/design-rules.md) when creating
   netclasses, configuring project constraints, or adjudicating DRC results.
+- Read [`references/high-speed-design.md`](references/high-speed-design.md)
+  before placing, routing or choosing a stackup for any interface faster than
+  ordinary GPIO, or a device in a flip-chip BGA package.
 
 ---
 
@@ -134,7 +137,9 @@ Do NOT add copper pours before routing is complete — they interfere with inter
 - Cable/EMI filter caps: on the connector's own pins, and judged against that
   connector rather than the nearest IC
 - Connectors: at board edges, accessible for cables
-- High-frequency components: minimize trace lengths between them
+- High-speed interfaces: decide by edge rate whether a net is a transmission
+  line; place to keep those channels short, with a continuous reference plane
+  and room for 3W spacing (see `references/high-speed-design.md`)
 - Thermal considerations: power components away from sensitive analog
 
 ### Placement Tools
@@ -250,7 +255,7 @@ geometry field is unavailable evidence, not a zero-size pad.
 |---------------------------|---------------------------------------------|
 | `route_pad_to_pad`        | Direct connection, auto L-bend routing      |
 | `route_trace`             | Manual segment-by-segment routing           |
-| `route_differential_pair` | Matched-length USB/LVDS/Ethernet pairs      |
+| `route_differential_pair` | P/N pair as two parallel segments at a fixed gap |
 | `add_via`                 | Layer transition                            |
 | `create_netclass`         | Define width/clearance rules for net groups |
 
@@ -296,6 +301,22 @@ route_differential_pair(board, net_pos, net_neg, x1, y1, x2, y2, gap?, layer?, w
   only follows from the two traces being parallel segments. Skew introduced
   before or after this call is yours to correct
 - Common pairs: USB_D+/USB_D-, LVDS_P/LVDS_N
+
+### High-speed routing
+
+Follow [`references/high-speed-design.md`](references/high-speed-design.md).
+In short:
+
+- Return path before neatness: no plane splits, anti-pad voids or broken
+  references under a fast net, and a return path at every layer change.
+- Route sensitive nets on internal layers beside their reference plane; keep
+  them short with few vias.
+- Keep clocks and sensitive nets at least 3× the trace width from neighbours,
+  enforced through netclass clearance and DRC.
+- Fix reflections with termination and return-path continuity, not cosmetic
+  rerouting; 90° bends are rarely the problem at common GHz rates.
+- Konnect has no impedance, crosstalk or eye analysis. Report an SI verdict
+  that needs one as `INCOMPLETE`.
 
 ### Netclasses
 
