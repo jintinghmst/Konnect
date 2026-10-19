@@ -16,7 +16,9 @@
 | netlist | load a schematic's components, values and nets via kicad-cli |
 | units | parse KiCad value text such as "22uF 16V" or "470pF DNP" |
 | report | checks with status, method, sources and assumptions; Markdown and JSON output |
-| buck | buck design equations and a switched open-loop SPICE testbench |
+| buck | buck design equations, a switched open-loop SPICE testbench (optionally with layout parasitics and an edge-resolved run), and extraction of a buck layout's parasitics |
+| layout | read a saved board (read-only): pads, tracks, vias, pours, stackup; copper path resistance, loop and via inductance, IPC-2221 track width |
+| cycle | iteration log and continue / revert / met / stalled / limit decisions for the optimisation cycle |
 
 ## Choosing a method
 

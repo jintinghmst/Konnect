@@ -748,6 +748,12 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         // kicad-simulation: the Python package and example script names.
         "konnect_sim",
         "buck_ripple",
+        // kicad-sim-optimize: functions of the simulation package's layout module.
+        "layer_gap_mm",
+        "loop_inductance",
+        "via_inductance",
+        "thickness_mm",
+        "l_per_m",
     ];
 
     let mut phantom = Vec::new();

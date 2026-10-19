@@ -95,6 +95,12 @@ check is incomplete, otherwise PASS.
 
 ---
 
+## When the result depends on the layout
+
+To extract the board's parasitics into the simulation, and to iterate the layout
+until the checks meet their limits, use the `kicad-sim-optimize` skill. It
+reuses this skill's scripts and report rules.
+
 ## Limits to state plainly
 
 - SPICE here has no model of a specific controller IC unless the vendor's model

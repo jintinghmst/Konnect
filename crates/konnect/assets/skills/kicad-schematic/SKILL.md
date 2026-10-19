@@ -237,7 +237,7 @@ multi-unit component can report both.
 ## Common Patterns
 
 ### Decoupling Capacitor
-Place 100nF cap (Device:C) within 5mm of IC power pin. Connect one pin to VCC via power symbol, other pin to GND via power symbol. One cap per VCC/VDD pin.
+Place 100nF cap (Device:C) within 5mm of IC power pin. Connect one pin to VCC via power symbol, other pin to GND via power symbol. One cap per VCC/VDD pin. For fast devices, take values and counts from the datasheet instead (see High-Speed Nets at Schematic Stage).
 
 ### Pull-up Resistor
 Place resistor (Device:R) vertically. Connect one pin to the signal net via `connect_to_net`, other pin to VCC via `add_power_symbol`. Typical values: 4.7k for I2C, 10k for general.
@@ -253,6 +253,93 @@ For analog circuits: 100nF ceramic + 10uF electrolytic in parallel, close to pow
 
 ### Crystal Oscillator
 Crystal (Device:Crystal) between XI and XO pins. Two load capacitors from each crystal pin to GND. Typical load caps: 12-22pF. Optional 1M feedback resistor across crystal.
+
+---
+
+## High-Speed Nets at Schematic Stage
+
+Signal integrity starts in the schematic: termination, bypassing, test access
+and the channel's requirements are fixed here, and fixing them after routing is
+the expensive path. The principles below are condensed from Sheridan
+Technologies, "Signal Integrity: A Practical Guide for High-Speed Design"
+(sheridantech.io/2026/07/30/signal-integrity/, retrieved 2026-10-17). The full
+rules, including layout, are in the kicad-pcb skill's
+`references/high-speed-design.md`; read it before drawing any interface faster
+than ordinary GPIO.
+
+The source gives no termination values, impedance targets or capacitor values.
+Take those from the interface specification and the component datasheets. A
+missing input makes the decision `INCOMPLETE`; do not substitute a remembered
+number.
+
+### 1. Identify the fast nets by edge rate
+
+A net becomes a transmission line when its rise time is short compared with its
+propagation delay on the board. Judge by **rise time, not clock frequency**:
+
+- a 1.0 ns edge has a critical length of roughly 3 in (about 75 mm);
+- a ~75 ps edge (a 5 GHz-class signal) has a critical length of roughly 1/4 in
+  (about 6 mm);
+- above about 100 MHz every signal needs SI-aware design, and any interface
+  faster than ordinary GPIO is a channel to design, not a connection to draw.
+
+Take each driver's rise time from its datasheet or IBIS model. List the nets
+that qualify, with the rise time and its source, in a schematic note
+(`add_schematic_text`) so layout inherits the list.
+
+### 2. Choose termination here, not in layout
+
+- Series, parallel and AC termination solve different problems; the wrong
+  choice can be worse than none. Choose from driver behaviour, receiver
+  sensitivity and edge rate.
+- Place the termination parts in the schematic with values from the interface
+  specification or driver/receiver datasheets, and record that source in a
+  field on the part (`batch_edit_schematic_components` with `create_missing`).
+- Confirm the choice by schematic review and, where models exist, pre-layout
+  simulation (next section).
+
+### 3. Get the models for pre-layout simulation
+
+IBIS and IBIS-AMI models let the channel be simulated with realistic driver and
+receiver behaviour before hardware exists. When choosing a fast device, check
+that its vendor publishes these models and note where they are. A predicted
+marginal eye is a design problem to fix in the schematic, not a lab problem.
+Konnect has no channel simulator; report an SI verdict that needs one as
+`INCOMPLETE`.
+
+### 4. Bypassing and power distribution
+
+- Simultaneous switching outputs move logic thresholds and eat margin; the
+  practical lever is power distribution.
+- Give each power pin of a fast device its bypass capacitor, drawn next to that
+  pin so placement keeps them close to the pins they serve. Choose values and
+  counts from the device's datasheet or hardware design guide, not a generic
+  rule, and mark them for PDN review.
+
+### 5. Connectors are part of the channel
+
+A connector that interrupts the return path becomes the bottleneck. Choose
+connectors for fast interfaces with ground pins beside or between the signal
+pins as the interface specification requires, and treat each connector
+transition as part of the channel when budgeting.
+
+### 6. Plan measurement access now
+
+Design probe access in early, close to the source or the receiver. Test pads,
+vias and stubs change impedance, so keep them few on sensitive nets and decide
+them at schematic stage rather than adding them after routing. Record the
+access points as the start of the bring-up plan.
+
+### 7. Hand requirements to layout
+
+- Record each fast interface's requirements beside it in a schematic note:
+  impedance target, termination and its source, models, and the stackup
+  assumption. The evidence package is tied to one configuration; a later change
+  of stackup, laminate or connector may need re-analysis.
+- Name each differential pair's nets with a matching suffix pair such as
+  `_P`/`_N` or `+`/`-` (a KiCad convention, not from the source), so layout
+  recognises the pair and netclasses can be set with `create_netclass` and
+  `assign_net_to_class`.
 
 ---
 

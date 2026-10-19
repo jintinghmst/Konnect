@@ -18,7 +18,9 @@ package for the parts that must be reliable every time.
 | `netlist` | `load(schematic)` → components, values, nets (via kicad-cli) |
 | `units` | Parse KiCad values: `"22uF 16V"`, `"100k 0.1%"`, `"470pF DNP"` |
 | `report` | `Check` / `Report` with PASS / FAIL / INCOMPLETE rules; Markdown + JSON |
-| `buck` | Buck design equations and a switched open-loop SPICE testbench |
+| `buck` | Buck design equations, a switched open-loop SPICE testbench (optionally with layout parasitics, plus an edge-resolved run for hot-loop ringing), and `layout_parasitics()` for a buck board |
+| `layout` | Read a saved `.kicad_pcb` (read-only): pads, tracks, vias, pours, stackup; copper path resistance, loop/via inductance with a plane under the loop, IPC-2221 track width |
+| `cycle` | `CycleLog`: iteration history and continue / revert / met / stalled / limit decisions for the `kicad-sim-optimize` cycle |
 
 ## Usage
 
@@ -34,5 +36,9 @@ design = netlist.load(r"path\to\board.kicad_sch")
 python -m pytest sim/tests -q
 ```
 
-The switched buck testbench is checked against the closed-form equations
-(inductor ripple and input RMS current within 5 %).
+Every module is checked against an independent calculation: the switched buck
+testbench against the closed-form equations (within 5 %), hot-loop ringing
+frequency against 1/(2π√LC) (within 10 %), track resistance against
+ρL/(w·t) on KiCad's demo board, the loop-inductance estimate against the exact
+square-loop formula (within 10 %), and the cycle's decision rules on scripted
+histories.

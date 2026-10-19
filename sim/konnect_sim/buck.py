@@ -15,7 +15,7 @@ need the vendor's controller model; without it those checks are INCOMPLETE.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -102,6 +102,14 @@ class BuckTestbench:
     c_sw_f: float = 300e-12
     cycles: int = 400
     measure_cycles: int = 20
+    edge_s: float = 5e-9          # gate edge time; sets the switching speed
+    tmax_s: float | None = None   # max timestep (set for edge-resolved runs)
+    # Layout parasitics, normally from layout_parasitics(); 0 = not modelled.
+    l_hot_h: float = 0.0          # input hot loop: Cin -> high side -> low side -> Cin
+    r_hot_ohm: float = 0.0        # copper resistance of that loop
+    c_vin_pin_f: float = 100e-12  # capacitance at the IC VIN pin (used with l_hot_h)
+    r_sw_path_ohm: float = 0.0    # SW pin -> inductor copper
+    r_out_path_ohm: float = 0.0   # output capacitors -> load point copper
     notes: list[str] = field(default_factory=list)
 
     def _bank_lines(self, name: str, node: str, banks: list[CapBank]) -> list[str]:
@@ -130,26 +138,36 @@ class BuckTestbench:
             f"LSRC s1 vin {self.source_l_h}",
         ]
         lines += self._bank_lines("IN", "vin", self.cin)
+        # Hot loop: copper between the input capacitors and the IC's VIN pin.
+        # The loop's inductance and resistance are lumped into the VIN leg.
+        lines += [
+            f"LHOT vin vh {max(self.l_hot_h, 1e-15):.6e}",
+            f"RHOT vh vic {max(self.r_hot_ohm, 1e-6):.6e}",
+            f"CVIC vic 0 {self.c_vin_pin_f:.6e}",
+        ] if self.l_hot_h > 0 else [f"RHOT vin vic {max(self.r_hot_ohm, 1e-6):.6e}"]
+        e = self.edge_s
         lines += [
             # gate drives: HS on for `on`, LS on for `off`, dead time between
-            f"VGH gh 0 PULSE(0 5 0 5n 5n {on:.6e} {t:.6e})",
-            f"VGL gl 0 PULSE(0 5 {on + self.dead_time_s:.6e} 5n 5n {off:.6e} {t:.6e})",
+            f"VGH gh 0 PULSE(0 5 0 {e:.3e} {e:.3e} {on:.6e} {t:.6e})",
+            f"VGL gl 0 PULSE(0 5 {on + self.dead_time_s:.6e} {e:.3e} {e:.3e} {off:.6e} {t:.6e})",
             # Switches as gate-controlled conductances: 0 when the gate is low,
             # 1/RDS(on) when high, ramping linearly over the gate edge. Smoother
             # than ngspice's ideal S element, which fails to converge here.
-            f"BHS vin sw I=V(vin,sw)*(1e-6 + min(max(V(gh)/5,0),1)/{self.rds_hs_ohm})",
+            f"BHS vic sw I=V(vic,sw)*(1e-6 + min(max(V(gh)/5,0),1)/{self.rds_hs_ohm})",
             f"BLS sw 0 I=V(sw)*(1e-6 + min(max(V(gl)/5,0),1)/{self.rds_ls_ohm})",
             # body diode of the low-side FET carries current during dead time
             "DLS 0 sw DBODY",
             f"CSW sw 0 {self.c_sw_f:.6e}",
-            f"L1 sw lx {self.l_h:.6e} IC={self.iout}",
+            f"RSWP sw swl {max(self.r_sw_path_ohm, 1e-6):.6e}",
+            f"L1 swl lx {self.l_h:.6e} IC={self.iout}",
             f"RDCR lx vout {self.l_dcr_ohm:.6e}",
         ]
         lines += [l.replace("{VCAP}", str(self.vout_target)) for l in self._bank_lines("OUT", "vout", self.cout)]
         lines += [
-            f"RLOAD vout 0 {rload:.6e}",
+            f"ROUTP vout vload {max(self.r_out_path_ohm, 1e-6):.6e}",
+            f"RLOAD vload 0 {rload:.6e}",
             ".model DBODY D(IS=1e-12 N=1.05 RS=0.01)",
-            f".tran {t / 400:.4e} {tstop:.6e} UIC",
+            f".tran {t / 400:.4e} {tstop:.6e}" + (f" 0 {self.tmax_s:.4e}" if self.tmax_s else "") + " UIC",
             ".options method=gear reltol=1e-4",
             ".end",
         ]
@@ -181,7 +199,41 @@ class BuckTestbench:
             "il_pp": float(il.max() - il.min()),
             "il_peak": float(il.max()),
             "icin_rms": rms(icin),
+            "vload_avg": float(np.trapezoid(res["vload"][w], tw) / (tw[-1] - tw[0])),
+            "vload_pp": float(res["vload"][w].max() - res["vload"][w].min()),
+            "vsw_max": float(res["sw"][w].max()),
         }
+
+    def ring_frequency_cf(self) -> float | None:
+        """Closed-form switch-node ringing frequency with the high side on:
+        the hot-loop inductance against the switch-node and VIN-pin capacitance."""
+        if self.l_hot_h <= 0:
+            return None
+        return 1 / (2 * math.pi * math.sqrt(self.l_hot_h * (self.c_sw_f + self.c_vin_pin_f)))
+
+    def run_edge(self, d: float, cycles: int = 6, points_per_ring: int = 40) -> dict:
+        """Edge-resolved run: a few cycles from steady state with a timestep
+        fine enough to resolve hot-loop ringing. Returns the switch-node peak
+        and the measured ringing frequency after the last rising edge."""
+        f_cf = self.ring_frequency_cf()
+        tmax = (1 / f_cf / points_per_ring) if f_cf else self.edge_s / 20
+        tb = replace(self, cycles=cycles, tmax_s=tmax, measure_cycles=2)
+        res = run_netlist(tb.netlist(d))
+        t, v = res["time"], res["sw"]
+        T = 1 / self.fsw
+        t0 = (cycles - 1) * T
+        last = t >= t0
+        out = {"vsw_max": float(v[last].max()), "vsw_min": float(v[last].min()),
+               "ring_hz": None, "ring_hz_cf": f_cf, "tmax_s": tmax}
+        # ringing after the high-side turn-on edge of the last cycle
+        win = (t >= t0 + 2 * self.edge_s) & (t <= t0 + min(0.8 * d * T, 2e-7))
+        if win.sum() > 20:
+            tw, vw = t[win], v[win] - np.median(v[win])
+            idx = np.where(np.diff(np.sign(vw)) != 0)[0]
+            if len(idx) >= 4:
+                tc = tw[idx] - vw[idx] * (tw[idx + 1] - tw[idx]) / (vw[idx + 1] - vw[idx])
+                out["ring_hz"] = float((len(tc) - 1) / (2 * (tc[-1] - tc[0])))
+        return out
 
     def run_at_setpoint(self, iterations: int = 3) -> dict:
         """Adjust duty so the average output equals ``vout_target`` (open loop),
@@ -192,3 +244,144 @@ class BuckTestbench:
             d *= self.vout_target / r["vout_avg"]
             r = self.run(d)
         return r
+
+
+# ── Layout extraction ──────────────────────────────────────────────────────
+
+def _board_net(board, name: str) -> str:
+    """Board net name for a schematic net ('VIN' may be '/VIN' on the board)."""
+    names = {p.net for f in board.footprints.values() for p in f.pads.values()}
+    for n in (name, "/" + name):
+        if n in names:
+            return n
+    raise KeyError(f"net {name} has no pads on the board")
+
+
+def _pad_on(board, ref: str, net: str):
+    pads = [p for p in board.footprints[ref].pads.values() if p.net == net]
+    if not pads:
+        raise KeyError(f"{ref} has no pad on {net}")
+    return pads[0]
+
+
+def layout_parasitics(board, *, ic: str, ic_vin: str, ic_gnd: str, ic_sw: str,
+                      cin_refs: list[str], inductor: str, sense: tuple[str, str],
+                      load_vout: tuple[str, str], load_gnd: tuple[str, str],
+                      sense_gnd: tuple[str, str], source_vin: tuple[str, str] | None = None,
+                      nets: dict[str, str] | None = None, er: float = 4.5,
+                      temp_c: float = 25.0) -> dict:
+    """Parasitics of a buck layout, read from a saved board.
+
+    Hot loop, per input capacitor:
+      - GND routed back to the IC with tracks: the loop is the polygon of the
+        actual VIN and GND track paths (plane under it subtracts its image).
+      - GND returned through a plane (the usual case): the loop is the VIN
+        track over the plane, L = L'(microstrip) x path length, plus the
+        inductance of the GND vias the return passes through at each end.
+      The capacitor with the lowest loop dominates the switching edge, so
+      L_hot is the minimum over the capacitors (parallel caps sharing copper
+      do not simply add as parallel inductors).
+
+    Load-point drop: the regulator holds the point where the feedback sense
+    line joins the output power path; the load sees that voltage minus the
+    load current times the power-path copper from the junction to the load pad
+    (and the ground return, when it is routed with tracks).
+
+    Track capacity: narrowest track at least 2 mm long on each high-current
+    path (source -> IC VIN, IC SW -> inductor, inductor -> load).
+    """
+    from . import layout as lay
+
+    nets = {k: _board_net(board, v) for k, v in
+            ({"VIN": "VIN", "GND": "GND", "SW": "SW", "VOUT": "VOUT"} | (nets or {})).items()}
+    unmodelled, loops = [], []
+    pv, pg = board.pad(ic, ic_vin), board.pad(ic, ic_gnd)
+    layer = "F.Cu" if pv.on("F.Cu") else "B.Cu"
+    cu = board.copper(layer)
+    gnd_vias = board.net_vias(nets["GND"])
+
+    def vias_near(pad, reach=2.0):
+        return [v for v in gnd_vias if math.hypot(v.x - pad.x, v.y - pad.y) <= reach + pad.reach]
+
+    for ref in cin_refs:
+        cv, cg = _pad_on(board, ref, nets["VIN"]), _pad_on(board, ref, nets["GND"])
+        path_v = lay.path_resistance(board, nets["VIN"], (ref, cv.number), (ic, ic_vin), temp_c)
+        path_g = lay.path_resistance(board, nets["GND"], (ref, cg.number), (ic, ic_gnd), temp_c)
+        entry = {"ref": ref, "vin_path_mm": round(path_v.length_mm, 2) if path_v else None}
+        if path_v is None:
+            unmodelled.append(f"{ref}: no VIN track path to {ic} pin {ic_vin}")
+            loops.append(entry | {"l_loop_h": None})
+            continue
+        if path_g is not None:
+            pts = path_v.points + list(reversed(path_g.points))
+            cx, cy = sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)
+            plane = board.plane_under(nets["GND"], cx, cy, layer)
+            gap = board.layer_gap_mm(layer, plane) if plane else None
+            w = min(path_v.min_width_mm, path_g.min_width_mm)
+            loop = lay.loop_inductance(pts, w, cu, gap)
+            l_loop = loop["henry"] + (path_v.vias + path_g.vias) * lay.via_inductance(board.thickness_mm, 0.4)
+            entry |= {"model": "routed loop polygon", "area_mm2": round(loop["area_mm2"], 2),
+                      "plane_gap_mm": gap, "r_copper_ohm": path_v.resistance + path_g.resistance}
+        else:
+            # Return through the plane under the VIN track.
+            plane = board.plane_under(nets["GND"], (cv.x + pv.x) / 2, (cv.y + pv.y) / 2, layer)
+            near_c, near_ic = vias_near(cg), vias_near(pg)
+            if plane is None or not near_c or not near_ic:
+                unmodelled.append(f"{ref}: GND return is through a same-layer pour "
+                                  f"(no plane path with vias at both ends); loop not modelled")
+                loops.append(entry | {"l_loop_h": None})
+                continue
+            gap = board.layer_gap_mm(layer, plane)
+            length = sum(e["length"] for e in path_v.edges)
+            w_eff = sum(e["length"] * e["width"] for e in path_v.edges if e["width"] != math.inf) / max(length, 1e-9)
+            ms = lay.microstrip(w_eff, gap, er)
+            l_via = min(lay.via_inductance(board.thickness_mm, v.drill) for v in near_c) / len(near_c) +                 min(lay.via_inductance(board.thickness_mm, v.drill) for v in near_ic) / len(near_ic)
+            l_loop = ms["l_per_m"] * length * 1e-3 + l_via
+            entry |= {"model": "VIN track over plane + GND vias", "plane_gap_mm": gap,
+                      "w_eff_mm": round(w_eff, 3), "l_track_h": ms["l_per_m"] * length * 1e-3,
+                      "l_vias_h": l_via, "gnd_vias": [len(near_c), len(near_ic)],
+                      "r_copper_ohm": path_v.resistance}
+        loops.append(entry | {"l_loop_h": l_loop})
+
+    modelled = [lp for lp in loops if lp.get("l_loop_h")]
+    best = min(modelled, key=lambda lp: lp["l_loop_h"]) if modelled else None
+
+    def path(net, a, b, label):
+        p_ = lay.path_resistance(board, nets[net], a, b, temp_c)
+        if p_ is None:
+            unmodelled.append(f"{label}: no track path (pour or unrouted)")
+        return p_
+
+    l_sw = _pad_on(board, inductor, nets["SW"])
+    l_out = _pad_on(board, inductor, nets["VOUT"])
+    p_sw = path("SW", (ic, ic_sw), (inductor, l_sw.number), f"{ic} SW to {inductor}")
+    p_pow = path("VOUT", (inductor, l_out.number), load_vout, f"{inductor} to load VOUT pad")
+    p_sense = path("VOUT", sense, load_vout, "feedback tap to load VOUT pad")
+    p_gnd = path("GND", load_gnd, sense_gnd, "load GND pad to feedback ground")
+    p_in = path("VIN", source_vin, (ic, ic_vin), "input connector to IC VIN") if source_vin else None
+
+    r_drop, junction = 0.0, None
+    if p_pow and p_sense:
+        on_power = set(p_pow.nodes)
+        junction = next((n for n in p_sense.nodes if n in on_power), None)
+        if junction is not None:
+            r_drop = p_pow.resistance_from(junction)
+        else:
+            unmodelled.append("feedback sense line does not join the output power path")
+
+    def width(p_):
+        return p_.min_width_over(2.0) if p_ else None
+
+    return {
+        "l_hot_h": best["l_loop_h"] if best else 0.0,
+        "hot_loop_cap": best["ref"] if best else None,
+        "r_hot_ohm": best.get("r_copper_ohm", 0.0) if best else 0.0,
+        "loops": loops,
+        "r_sw_path_ohm": p_sw.resistance if p_sw else 0.0,
+        "r_out_path_ohm": r_drop,
+        "sense_junction": str(junction) if junction else None,
+        "r_gnd_return_ohm": p_gnd.resistance if p_gnd else 0.0,
+        "min_long_width_mm": {"VIN": width(p_in), "SW": width(p_sw), "VOUT": width(p_pow), "GND": width(p_gnd)},
+        "copper_mm": cu, "stackup_sourced": board.stackup_sourced, "er_assumed": er,
+        "nets": nets, "unmodelled": unmodelled,
+    }
