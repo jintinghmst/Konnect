@@ -90,6 +90,21 @@ class Pad:
     size: tuple[float, float]
     layers: list[str]
     rotation: float = 0.0     # absolute pad orientation, degrees (as KiCad stores it)
+    shape: str = "rect"       # rect, roundrect, circle, oval, trapezoid, custom
+    drill: float = 0.0        # through-hole drill diameter, mm (0 for SMD)
+
+    def contains(self, x: float, y: float) -> bool:
+        """Whether (x, y) lies on the pad's copper (circle and oval shapes
+        as such, every other shape as its bounding rectangle)."""
+        lx, ly = _rotate(x - self.x, y - self.y, -self.rotation)
+        hx, hy = self.size[0] / 2, self.size[1] / 2
+        if self.shape == "circle":
+            return lx * lx + ly * ly <= hx * hx
+        if self.shape == "oval":
+            r = min(hx, hy)
+            cx, cy = max(abs(lx) - (hx - r), 0.0), max(abs(ly) - (hy - r), 0.0)
+            return cx * cx + cy * cy <= r * r
+        return abs(lx) <= hx and abs(ly) <= hy
 
     def on(self, layer: str) -> bool:
         return layer in self.layers or "*.Cu" in self.layers
@@ -179,6 +194,11 @@ class Zone:
     layers: list[str]
     outline: list[tuple[float, float]]
     filled: bool
+    # the copper KiCad actually poured, per layer: a list of polygons each
+    # given as its outline points. KiCad stores fills "fractured" (holes joined
+    # to the outline by zero-width slits), so even-odd point-in-polygon on each
+    # polygon is the exact copper test, thermal-relief spokes included.
+    fills: dict[str, list[list[tuple[float, float]]]] = field(default_factory=dict)
 
 
 @dataclass
@@ -192,6 +212,7 @@ class Board:
     thickness_mm: float              # board thickness
     stackup_sourced: bool            # False when defaults were used
     stack: list[tuple[str, str, float]] = field(default_factory=list)  # (name, type, mm), top down
+    stackup_source: str = ""         # where a sourced stackup came from
 
     def pad(self, ref: str, number: str) -> Pad:
         return self.footprints[ref].pads[number]
@@ -253,10 +274,13 @@ def load(path: str | Path) -> Board:
             dx, dy = _rotate(px, py, frot)
             size = _kid(p, "size")
             layers = _kid(p, "layers")
+            drill = _kid(p, "drill")
+            dval = next((float(d) for d in (drill or [])[1:] if _isnum(d)), 0.0)
             f.pads[str(p[1])] = Pad(ref, str(p[1]), _val(p, "net", default="") or "",
                                     fx + dx, fy + dy,
                                     (float(size[1]), float(size[2])) if size else (0.0, 0.0),
-                                    list(layers[1:]) if layers else [], prot)
+                                    list(layers[1:]) if layers else [], prot,
+                                    str(p[3]) if len(p) > 3 else "rect", dval)
         if ref:
             footprints[ref] = f
 
@@ -278,9 +302,16 @@ def load(path: str | Path) -> Board:
         pts = []
         if poly is not None and _kid(poly, "pts") is not None:
             pts = [(float(p[1]), float(p[2])) for p in _kids(_kid(poly, "pts"), "xy")]
+        fills: dict = {}
+        for fp in _kids(z, "filled_polygon"):
+            fl = _val(fp, "layer", default=None) or (layers[1] if layers else "")
+            fpts = _kid(fp, "pts")
+            if fpts is not None:
+                fills.setdefault(fl, []).append(
+                    [(float(q[1]), float(q[2])) for q in _kids(fpts, "xy")])
         zones.append(Zone(_val(z, "net_name", default=None) or _val(z, "net", default=""),
                           list(layers[1:]) if layers else [], pts,
-                          bool(_kids(z, "filled_polygon"))))
+                          bool(fills), fills))
 
     copper, total, sourced, stack_list = {}, 0.0, False, []
     setup = _kid(root, "setup")
@@ -297,7 +328,8 @@ def load(path: str | Path) -> Board:
                 sourced = True
     general = _kid(root, "general")
     thickness = float(_val(general, "thickness", default=total or 1.6)) if general else (total or 1.6)
-    return Board(path, footprints, segments, vias, zones, copper, thickness, sourced, stack_list)
+    return Board(path, footprints, segments, vias, zones, copper, thickness, sourced, stack_list,
+                 f"board stackup ({path.name})" if sourced else "")
 
 
 # --- Physics helpers ----------------------------------------------------------

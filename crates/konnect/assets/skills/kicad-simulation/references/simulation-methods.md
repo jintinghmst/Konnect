@@ -17,8 +17,45 @@
 | units | parse KiCad value text such as "22uF 16V" or "470pF DNP" |
 | report | checks with status, method, sources and assumptions; Markdown and JSON output |
 | buck | buck design equations, a switched open-loop SPICE testbench (optionally with layout parasitics and an edge-resolved run), and extraction of a buck layout's parasitics |
-| layout | read a saved board (read-only): pads, tracks, vias, pours, stackup; copper path resistance, loop and via inductance, IPC-2221 track width |
+| layout | read a saved board (read-only): pads, tracks, vias, pours and their fills, stackup; copper path resistance, loop and via inductance, IPC-2221 track width |
 | cycle | iteration log and continue / revert / met / stalled / limit decisions for the optimisation cycle |
+| stackup | stackup with provenance: the board's own, or a fabricator's published stackup as JSON with its source; applied to a board for every extraction |
+| copper | DC flow in the real copper of a net (filled pours with thermal reliefs, tracks, pads, via and plated-hole barrels): connectivity, resistance, current density, via currents, I²R maps |
+| parts | inductor and capacitor suitability from manufacturer data: saturation, L(I), RMS current, losses, temperature; effective capacitance, ripple share by impedance, self-heating, voltage derating |
+| losses | synchronous-buck loss budget and efficiency, junction temperature solved with RDS(on)(Tj), switching time fitted to a vendor efficiency curve |
+| thermal | steady-state board temperature: copper-coverage heat spreading, laminate, film coefficient, component and copper heat sources |
+| converter | closed-loop switched simulation (source and cable, capacitor DC bias, L(I), DCM, body diodes) with COT, voltage-mode and peak-current-mode controllers; loop gain by series injection |
+| scenarios | closed-loop checks: regulation, stability over corners, load step, start-up/shut-down, light load, line steps and brown-out, overload and short |
+| stress | switch-node and pin stress from an edge-resolved run, against limits with durations; skin-effect resistance |
+| inputfilter | Middlebrook margin of the source network against the converter's negative input resistance; hot-plug overshoot |
+| emi | conducted DM spectrum at a LISN, limit-line margin, CM estimate, SW-to-FB mutual capacitance and coupled noise |
+| corners | tolerance vertices and Monte Carlo over sourced spreads |
+| budget | output-voltage window at the load: both limits, every contribution |
+
+## Coverage of a buck verification
+
+| Item | Check | Module | PASS/FAIL needs |
+|---|---|---|---|
+| Ground connectivity and extraction | load ground connected through fill; return R; plane partial L | copper, buck.layout_parasitics | zones filled and saved |
+| Stackup | copper, gaps, εr from a source | stackup | board stackup or fab document |
+| Closed-loop regulation | DC output over line and load | scenarios.regulation | validated controller model |
+| Stability | PM/GM by injection over line, load, Cout/ESR corners | converter.loop_gain, scenarios.stability | validated controller model; injection with `snr_ok` |
+| Load step | dip, overshoot, settling, ringing | scenarios.load_step | validated controller model; spec step and slew |
+| Start-up and shut-down | overshoot, inrush, monotonic rise, restart | scenarios.startup_shutdown | validated controller model |
+| Light load | pulse skipping, ripple, regulation, audio-band pulses | scenarios.light_load | validated controller model |
+| Input transients | line steps, dip and brown-out, hot-plug | scenarios.input_transients, inputfilter.hot_plug | validated model; cable R/L |
+| Switch-node stress | peak, undershoot, time beyond each limit | buck.run_edge, stress | sourced edge time and damping |
+| Other pin stress | VIN pin, VBST–SW, VBST | buck (bootstrap model), stress | as above; datasheet limits |
+| Inductor | Isat margin, L(I), Irms, copper and core loss, temperature | parts | datasheet ratings, L(I) curve, core-loss data |
+| Capacitors | C_eff, ripple current per part, heating, voltage | parts | DC-bias curve, ESR(f), heating curve, derating policy |
+| Losses and efficiency | full loss budget, η | losses | RDS(on), tempco, switching times (or fit to vendor η curve) |
+| Thermal | Tj, component temperatures, board hot spot | losses, parts, thermal | θJA / package resistance; measured film coefficient |
+| Copper and via capacity | peak current density, via currents vs IPC-2221 | copper.capacity | RMS currents from the simulation |
+| Output-voltage limits | min and max at the load | budget | every term sourced |
+| Worst-case corners | L, C, ESR, R, Vref, temperature, fsw | corners | tolerance limits from datasheets |
+| Protection | overload, short, hiccup, recovery | scenarios.faults | validated model; datasheet limits |
+| Input-network interaction | Middlebrook margin, resonance, Q | inputfilter | cable/supply impedance |
+| EMI and coupling | DM spectrum vs limit, CM estimate, SW-to-FB noise | emi | limit line from the standard; C to chassis |
 
 ## Choosing a method
 
@@ -61,6 +98,28 @@ Output ripple was higher in SPICE (4.5 mV against 2.8 mV) because it includes
 capacitor ESL, which the closed form omits. The input RMS check only matches
 when the source has realistic impedance; an ideal source supplies the ripple
 current itself and hides the capacitor stress.
+
+## Validation evidence (extended models, 2026-10-19)
+
+| Model | Reference | Agreement |
+|---|---|---|
+| Copper solve, plate and track | ρL/(wt) between pad edges | within 1–2 % at ≥ 3 cells across |
+| Copper solve, two layers and a via | track resistance + barrel resistance | within 2 % |
+| Board thermal, uniform flux | q/(2h) plus the laminate drop | within 1 % |
+| Switched model, open loop | averaged switch node with the on-time input voltage | within 20 mV of 4.93 V; ripple within 3 % |
+| Loop gain by injection | analytic voltage-mode loop (type III, LC plant) | within 0.4 dB and a few degrees from 5 kHz to crossover |
+| Switching-time fit | loss budget generated with a known time | recovered exactly |
+
+Practical lessons from that work:
+
+- Switching instants must be exact: controllers schedule their next edge and
+  the integrator lands on it. Quantising edges to the step limited duty
+  resolution to dt/T and shifted the output by ~0.4 %.
+- Loop gain needs |V_x| at least the residual ripple (p-p): below it the
+  measurement errs by several dB and ~20°. Inject more where |T| is large,
+  exactly as on the bench.
+- The hot-loop ring has a characteristic impedance of about √(L/C) ≈ 2 Ω, so
+  milliohms of copper do not damp it; the overshoot is set by the edge rate.
 
 ## Common assumptions to declare
 

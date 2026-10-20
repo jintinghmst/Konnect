@@ -110,6 +110,13 @@ class BuckTestbench:
     c_vin_pin_f: float = 100e-12  # capacitance at the IC VIN pin (used with l_hot_h)
     r_sw_path_ohm: float = 0.0    # SW pin -> inductor copper
     r_out_path_ohm: float = 0.0   # output capacitors -> load point copper
+    # Bootstrap (0 = not modelled): C_boot from VBST to SW, charged from the
+    # internal drive supply v_drv through the bootstrap diode.
+    c_boot_f: float = 0.0
+    v_drv: float = 5.0
+    # Hot-loop resistance at the ringing frequency (skin effect, capacitor ESR
+    # there); used by run_edge in place of r_hot_ohm when given.
+    r_hot_ac_ohm: float | None = None
     notes: list[str] = field(default_factory=list)
 
     def _bank_lines(self, name: str, node: str, banks: list[CapBank]) -> list[str]:
@@ -162,6 +169,11 @@ class BuckTestbench:
             f"L1 swl lx {self.l_h:.6e} IC={self.iout}",
             f"RDCR lx vout {self.l_dcr_ohm:.6e}",
         ]
+        if self.c_boot_f > 0:
+            lines += [f"VDRV vdrv 0 DC {self.v_drv}", "DBOOT vdrv vbst DBST",
+                      f"CBOOT vbst sw {self.c_boot_f:.6e} IC={self.v_drv - 0.4}",
+                      "RBLEED vbst sw 1meg",
+                      ".model DBST D(IS=1e-9 N=1.2 RS=1)"]
         lines += [l.replace("{VCAP}", str(self.vout_target)) for l in self._bank_lines("OUT", "vout", self.cout)]
         lines += [
             f"ROUTP vout vload {max(self.r_out_path_ohm, 1e-6):.6e}",
@@ -217,14 +229,27 @@ class BuckTestbench:
         and the measured ringing frequency after the last rising edge."""
         f_cf = self.ring_frequency_cf()
         tmax = (1 / f_cf / points_per_ring) if f_cf else self.edge_s / 20
-        tb = replace(self, cycles=cycles, tmax_s=tmax, measure_cycles=2)
-        res = run_netlist(tb.netlist(d))
+        r_edge = self.r_hot_ac_ohm if self.r_hot_ac_ohm is not None else self.r_hot_ohm
+        # Ideal-ish switches make ngspice's step control fragile at particular
+        # values; a smaller maximum step is an equally valid solution of the
+        # same circuit, so retry with one before giving up.
+        for shrink in (1.0, 0.7, 0.45):
+            tb = replace(self, cycles=cycles, tmax_s=tmax * shrink, measure_cycles=2, r_hot_ohm=r_edge)
+            try:
+                res = run_netlist(tb.netlist(d))
+                break
+            except Exception:
+                if shrink == 0.45:
+                    raise
         t, v = res["time"], res["sw"]
         T = 1 / self.fsw
         t0 = (cycles - 1) * T
         last = t >= t0
         out = {"vsw_max": float(v[last].max()), "vsw_min": float(v[last].min()),
-               "ring_hz": None, "ring_hz_cf": f_cf, "tmax_s": tmax}
+               "ring_hz": None, "ring_hz_cf": f_cf, "tmax_s": tmax,
+               "waves": {"t": t[last], "sw": v[last], "vic": res["vic"][last]}}
+        if self.c_boot_f > 0:
+            out["waves"]["vbst"] = res["vbst"][last]
         # ringing after the high-side turn-on edge of the last cycle
         win = (t >= t0 + 2 * self.edge_s) & (t <= t0 + min(0.8 * d * T, 2e-7))
         if win.sum() > 20:
@@ -269,7 +294,7 @@ def layout_parasitics(board, *, ic: str, ic_vin: str, ic_gnd: str, ic_sw: str,
                       load_vout: tuple[str, str], load_gnd: tuple[str, str],
                       sense_gnd: tuple[str, str], source_vin: tuple[str, str] | None = None,
                       nets: dict[str, str] | None = None, er: float = 4.5,
-                      temp_c: float = 25.0) -> dict:
+                      temp_c: float = 25.0, copper_pitch_mm: float = 0.1) -> dict:
     """Parasitics of a buck layout, read from a saved board.
 
     Hot loop, per input capacitor:
@@ -287,8 +312,13 @@ def layout_parasitics(board, *, ic: str, ic_vin: str, ic_gnd: str, ic_sw: str,
     load current times the power-path copper from the junction to the load pad
     (and the ground return, when it is routed with tracks).
 
+    Ground return: the track path when there is one, otherwise the filled
+    copper solved by ``copper`` (pours with their thermal reliefs, tracks,
+    pads and vias), which also confirms that the load ground is connected.
+
     Track capacity: narrowest track at least 2 mm long on each high-current
-    path (source -> IC VIN, IC SW -> inductor, inductor -> load).
+    path (source -> IC VIN, IC SW -> inductor, inductor -> load); the full
+    current-density check through pours and vias is ``copper.capacity``.
     """
     from . import layout as lay
 
@@ -357,7 +387,21 @@ def layout_parasitics(board, *, ic: str, ic_vin: str, ic_gnd: str, ic_sw: str,
     p_sw = path("SW", (ic, ic_sw), (inductor, l_sw.number), f"{ic} SW to {inductor}")
     p_pow = path("VOUT", (inductor, l_out.number), load_vout, f"{inductor} to load VOUT pad")
     p_sense = path("VOUT", sense, load_vout, "feedback tap to load VOUT pad")
-    p_gnd = path("GND", load_gnd, sense_gnd, "load GND pad to feedback ground")
+    p_gnd = lay.path_resistance(board, nets["GND"], load_gnd, sense_gnd, temp_c)
+    # The ground return usually runs in a pour: solve the real filled copper
+    # (pours, tracks, pads, vias) for connectivity and resistance.
+    gnd = {"method": "track path" if p_gnd else None, "connected": bool(p_gnd),
+           "r_ohm": p_gnd.resistance if p_gnd else 0.0}
+    if p_gnd is None:
+        from . import copper
+        grid = copper.build(board, nets["GND"], copper_pitch_mm, temp_c)
+        if grid.unfilled_zones:
+            unmodelled.append("GND zones saved without fill (refill and save): " + ", ".join(grid.unfilled_zones))
+        flow = copper.solve(grid, [load_gnd], [sense_gnd])
+        gnd = {"method": f"filled-copper solve ({grid.resolution_note})", "connected": flow.connected,
+               "r_ohm": flow.resistance_ohm or 0.0}
+        if not flow.connected:
+            unmodelled.append("load GND pad is NOT connected to the feedback ground through copper")
     p_in = path("VIN", source_vin, (ic, ic_vin), "input connector to IC VIN") if source_vin else None
 
     r_drop, junction = 0.0, None
@@ -380,7 +424,8 @@ def layout_parasitics(board, *, ic: str, ic_vin: str, ic_gnd: str, ic_sw: str,
         "r_sw_path_ohm": p_sw.resistance if p_sw else 0.0,
         "r_out_path_ohm": r_drop,
         "sense_junction": str(junction) if junction else None,
-        "r_gnd_return_ohm": p_gnd.resistance if p_gnd else 0.0,
+        "r_gnd_return_ohm": gnd["r_ohm"],
+        "gnd_return": gnd,
         "min_long_width_mm": {"VIN": width(p_in), "SW": width(p_sw), "VOUT": width(p_pow), "GND": width(p_gnd)},
         "copper_mm": cu, "stackup_sourced": board.stackup_sourced, "er_assumed": er,
         "nets": nets, "unmodelled": unmodelled,

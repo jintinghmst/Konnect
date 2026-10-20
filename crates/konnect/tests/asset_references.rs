@@ -748,6 +748,17 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         // kicad-simulation: the Python package and example script names.
         "konnect_sim",
         "buck_ripple",
+        // kicad-simulation: functions and fields of the simulation package.
+        "validated_by",
+        "layout_parasitics",
+        "loop_gain",
+        "snr_ok",
+        "load_step",
+        "startup_shutdown",
+        "light_load",
+        "input_transients",
+        "hot_plug",
+        "run_edge",
         // kicad-sim-optimize: functions of the simulation package's layout module.
         "layer_gap_mm",
         "loop_inductance",

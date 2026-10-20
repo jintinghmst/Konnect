@@ -48,8 +48,16 @@ traceable to the design file or a cited document.
 | Set-points, ratios, simple ripple and RMS estimates | Closed-form equations |
 | Steady-state switching waveforms, ripple with losses, component currents | Switched SPICE transient |
 | Linear filters, dividers, op-amp stages | SPICE AC/OP, compared with closed form |
-| Loop stability, load-step response | SPICE with the **vendor's controller model** |
+| Regulation, loop stability, load and line steps, start-up, light load, faults | Closed-loop switched simulation with a controller model (`converter`, `scenarios`); the **vendor's model** where it runs in ngspice |
+| Switch-node and pin voltage stress | Edge-resolved SPICE run plus `stress` limits with durations |
+| Copper resistance, ground connectivity, current density, via current | Filled-copper solve (`copper`) |
+| Inductor, capacitor, loss, efficiency and temperature | Manufacturer data through `parts`, `losses`, `thermal` |
+| Input-filter interaction, hot-plug, conducted EMI, SW-to-FB coupling | `inputfilter`, `emi` (pre-compliance estimates) |
 | Impedance, crosstalk, via transitions | Field solver (not available yet) |
+
+[`references/simulation-methods.md`](references/simulation-methods.md) maps
+every buck verification item to the module that checks it and the evidence
+that makes it PASS/FAIL rather than INCOMPLETE.
 
 Prefer two independent methods for every PASS (for example closed form and
 SPICE agreeing within a stated tolerance). One method alone is acceptable only
@@ -103,9 +111,18 @@ reuses this skill's scripts and report rules.
 
 ## Limits to state plainly
 
-- SPICE here has no model of a specific controller IC unless the vendor's model
-  is supplied. Open-loop switched models cannot prove stability or load-step
-  behaviour; report those `INCOMPLETE` until the controller model is available.
+- The closed-loop controllers (`converter.COT`, `VoltageMode`,
+  `PeakCurrentMode`) are behavioural models built from datasheet values.
+  Datasheets rarely publish internal values such as the ripple-injection gain,
+  so a controller counts as evidence only after it has been matched to a vendor
+  waveform (datasheet load-step or start-up figure) or a bench measurement,
+  recorded in `Common.validated_by`. Until then every closed-loop check is
+  `INCOMPLETE`, whatever its margin. Prefer the vendor's model when it runs.
+- The switch-node peak depends on the edge rate and on the switch's own
+  damping; copper resistance barely damps the hot-loop ring. Without a sourced
+  edge time (or the vendor's switch model) the stress result stays `INCOMPLETE`.
+- EMI results are harmonic amplitudes, not a CISPR 16 receiver: a margin under
+  about 6 dB is a fail-risk. Limit lines come from the standard, with citation.
 - Ceramic capacitors lose capacitance under DC bias. Without the manufacturer's
   derating curve for the exact part number, bound the result (nominal and a
   stated derated value) and mark the dependent check `INCOMPLETE`.

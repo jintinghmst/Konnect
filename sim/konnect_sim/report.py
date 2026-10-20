@@ -60,6 +60,60 @@ def judge(ok: bool, assumed: bool) -> str:
     return PASS if ok else FAIL
 
 
+@dataclass(frozen=True)
+class Param:
+    """A model input with its provenance. ``source`` names the datasheet page,
+    measurement, spec file or design file the value came from; an empty source
+    means the value is assumed."""
+    value: float
+    unit: str = ""
+    source: str = ""
+    name: str = ""
+
+    @property
+    def sourced(self) -> bool:
+        return bool(self.source)
+
+    def __float__(self) -> float:
+        return float(self.value)
+
+
+def val(x) -> float:
+    """Plain number from a ``Param`` or a number."""
+    return float(x.value) if isinstance(x, Param) else float(x)
+
+
+def provenance(params: dict) -> tuple[list[str], list[str]]:
+    """Split named inputs into (sources, assumptions) for a ``Check``.
+    Plain numbers and unsourced ``Param`` values count as assumptions; ``None``
+    entries are skipped."""
+    sources, assumed = [], []
+    for name, p in params.items():
+        if p is None:
+            continue
+        if isinstance(p, Param) and p.sourced:
+            if p.source not in sources:
+                sources.append(p.source)
+        else:
+            assumed.append(name)
+    return sources, assumed
+
+
+def check(name: str, requirement: str, result: str, ok: bool | None, method: str,
+          inputs: dict, *, to_complete: str = "", missing_model: str = "", **kw) -> Check:
+    """Build a ``Check`` whose status follows from its inputs' provenance.
+
+    ``ok`` None (the method cannot answer) or a ``missing_model`` gives
+    INCOMPLETE; so does any assumed input. Otherwise PASS/FAIL from ``ok``.
+    """
+    sources, assumed = provenance(inputs)
+    if missing_model:
+        assumed = assumed + [missing_model]
+    status = INCOMPLETE if ok is None or assumed else (PASS if ok else FAIL)
+    return Check(name, requirement, result, status, method, sources, assumed,
+                 to_complete, **kw)
+
+
 @dataclass
 class Report:
     title: str
