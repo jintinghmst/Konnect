@@ -83,44 +83,6 @@
 - Use the gear integration method and finite gate edges (a few ns).
 - Do not name a node `in`: ngspice's AC analysis fails on it. Use `vin`, `a`, or similar.
 
-## Validation evidence (buck testbench, 2026-10-16)
-
-On a 24 V to 5 V, 5 A, 500 kHz, 6.8 µH test case the switched testbench
-agreed with the closed-form equations:
-
-| Quantity | Closed form | SPICE |
-|---|---|---|
-| Inductor ripple | 1.16 A pp (ideal duty) | 1.20 A pp (loss-adjusted duty) |
-| Input capacitor RMS current | 2.04 A | 2.09 A |
-| Average inductor current | 5.00 A | 5.00 A |
-
-Output ripple was higher in SPICE (4.5 mV against 2.8 mV) because it includes
-capacitor ESL, which the closed form omits. The input RMS check only matches
-when the source has realistic impedance; an ideal source supplies the ripple
-current itself and hides the capacitor stress.
-
-## Validation evidence (extended models, 2026-10-19)
-
-| Model | Reference | Agreement |
-|---|---|---|
-| Copper solve, plate and track | ρL/(wt) between pad edges | within 1–2 % at ≥ 3 cells across |
-| Copper solve, two layers and a via | track resistance + barrel resistance | within 2 % |
-| Board thermal, uniform flux | q/(2h) plus the laminate drop | within 1 % |
-| Switched model, open loop | averaged switch node with the on-time input voltage | within 20 mV of 4.93 V; ripple within 3 % |
-| Loop gain by injection | analytic voltage-mode loop (type III, LC plant) | within 0.4 dB and a few degrees from 5 kHz to crossover |
-| Switching-time fit | loss budget generated with a known time | recovered exactly |
-
-Practical lessons from that work:
-
-- Switching instants must be exact: controllers schedule their next edge and
-  the integrator lands on it. Quantising edges to the step limited duty
-  resolution to dt/T and shifted the output by ~0.4 %.
-- Loop gain needs |V_x| at least the residual ripple (p-p): below it the
-  measurement errs by several dB and ~20°. Inject more where |T| is large,
-  exactly as on the bench.
-- The hot-loop ring has a characteristic impedance of about √(L/C) ≈ 2 Ω, so
-  milliohms of copper do not damp it; the overshoot is set by the edge rate.
-
 ## Common assumptions to declare
 
 | Parameter | Typical assumed range | Better source |

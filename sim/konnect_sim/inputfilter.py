@@ -101,6 +101,37 @@ def hot_plug(v_supply: float, r: float, l: float, c: float, esr: float = 0.0,
             "i_peak": float(i.max())}
 
 
+def hot_plug_branches(v_supply: float, r: float, l: float, branches: list[Branch],
+                      t_end: float = 200e-6, dt: float | None = None) -> dict:
+    """Peak input voltage when a charged supply is connected through R-L into
+    several uncharged capacitor branches in parallel (each C with its ESR and
+    ESL), e.g. ceramics plus a damping electrolytic. Integrated in the time
+    domain (RK4); ``hot_plug`` is the single-branch closed form it reduces to."""
+    caps = [b for b in branches if b.c]
+    w_max = max(1 / math.sqrt(l * sum(b.c for b in caps)), 1.0)
+    dt = dt or min(2 * math.pi / w_max / 400, min((b.r * b.c for b in caps), default=1) / 2)
+    n = int(t_end / dt)
+    g = [1 / max(b.r, 1e-6) for b in caps]
+
+    def f(x):
+        il, vc = x[0], x[1:]
+        v = (il + sum(gk * v_k for gk, v_k in zip(g, vc))) / sum(g)
+        d = [(v_supply - il * r - v) / l] + [gk * (v - v_k) / b.c for gk, v_k, b in zip(g, vc, caps)]
+        return d, v
+
+    x = [0.0] + [0.0] * len(caps)
+    v_peak, i_peak = 0.0, 0.0
+    for _ in range(n):
+        k1, v = f(x)
+        k2, _ = f([a + dt / 2 * b for a, b in zip(x, k1)])
+        k3, _ = f([a + dt / 2 * b for a, b in zip(x, k2)])
+        k4, _ = f([a + dt * b for a, b in zip(x, k3)])
+        x = [a + dt / 6 * (b1 + 2 * b2 + 2 * b3 + b4) for a, b1, b2, b3, b4 in zip(x, k1, k2, k3, k4)]
+        v_peak, i_peak = max(v_peak, v), max(i_peak, x[0])
+    c_tot = sum(b.c for b in caps)
+    return {"v_peak": v_peak, "i_peak": i_peak, "f_ring_hz": 1 / (2 * math.pi * math.sqrt(l * c_tot))}
+
+
 def checks(net: SourceNetwork, *, vin_min: Param, vin_max: Param, p_in_max: Param, f_cross: Param,
            margin_min: Param, vin_abs_max: Param, cable_l: Param, cable_r: Param,
            c_in: Param, esr_in: Param) -> list:
@@ -115,11 +146,15 @@ def checks(net: SourceNetwork, *, vin_min: Param, vin_max: Param, p_in_max: Para
                            "required margin": margin_min},
                  value=mb["min_margin_db"], limit=val(margin_min), sense="min",
                  lever="design: damping leg (R-C) across the input, or more bulk capacitance with ESR")]
-    hp = hot_plug(val(vin_max), val(cable_r), val(cable_l), val(c_in), val(esr_in))
+    if len([b for b in net.shunt if b.c]) > 1:
+        hp = hot_plug_branches(val(vin_max), val(cable_r), val(cable_l), net.shunt)
+        how, ring = "time-domain step into every input branch (C, ESR, ESL)", f"{hp['f_ring_hz'] / 1e3:.0f} kHz"
+    else:
+        hp = hot_plug(val(vin_max), val(cable_r), val(cable_l), val(c_in), val(esr_in))
+        how, ring = "series RLC step response", f"zeta {hp['zeta']:.2f}, {hp['f_ring_hz'] / 1e3:.0f} kHz"
     out.append(check("Hot-plug input overshoot", f"< {val(vin_abs_max):.1f} V (VIN abs max)",
-                     f"{hp['v_peak']:.2f} V peak from {val(vin_max):.1f} V (zeta {hp['zeta']:.2f}, "
-                     f"{hp['f_ring_hz'] / 1e3:.0f} kHz)", hp["v_peak"] < val(vin_abs_max),
-                     "series RLC step response", inputs | {"Vin max": vin_max, "VIN abs max": vin_abs_max},
+                     f"{hp['v_peak']:.2f} V peak from {val(vin_max):.1f} V ({ring})", hp["v_peak"] < val(vin_abs_max),
+                     how, inputs | {"Vin max": vin_max, "VIN abs max": vin_abs_max},
                      value=hp["v_peak"], limit=val(vin_abs_max),
                      lever="design: bulk electrolytic (ESR damping) or TVS at the input"))
     return out

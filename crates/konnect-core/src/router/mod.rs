@@ -201,7 +201,17 @@ mod tests {
                         "edit_schematic_component/properties/field_placements" |
                         "batch_edit_schematic_components/properties/edits/items/properties/fields" |
                         "copy_routing_pattern/properties/net_map" |
-                        "apply_template/properties/net_mappings"
+                        "apply_template/properties/net_mappings" |
+                        // simulation: caller-keyed maps (per footprint, per input, per metric)
+                        // and the check records other sim_* tools return
+                        "sim_board_thermal/properties/footprint_watts" |
+                        "sim_board_thermal/properties/limits_c" |
+                        "sim_board_thermal/properties/package_resistance" |
+                        "sim_corner_sweep/properties/metrics" |
+                        "sim_cycle_record/properties/objectives" |
+                        "sim_evaluate_check/properties/inputs" |
+                        "sim_layout_calc/properties/params" |
+                        "sim_write_report/properties/checks/items"
                     ),
                         "unreviewed open input record: {path}"
                     );

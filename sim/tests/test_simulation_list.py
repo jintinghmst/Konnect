@@ -304,6 +304,15 @@ def test_hot_plug_and_middlebrook():
     assert mb["z_peak_ohm"] == pytest.approx(z0 ** 2 / (0.01 + 0.0015), rel=0.1)   # Q-limited peak
 
 
+def test_hot_plug_branches_matches_closed_form():
+    one = inputfilter.hot_plug_branches(12.0, 0.05, 1e-6, [inputfilter.Branch(0.002, 0.0, 20e-6)])
+    ref = inputfilter.hot_plug(12.0, 0.05, 1e-6, 20e-6, 0.002)
+    assert one["v_peak"] == pytest.approx(ref["v_peak"], rel=0.01)
+    damped = inputfilter.hot_plug_branches(12.0, 0.05, 1e-6, [inputfilter.Branch(0.002, 0.0, 20e-6),
+                                                               inputfilter.Branch(0.85, 0.0, 47e-6)])
+    assert damped["v_peak"] < one["v_peak"] - 1.0      # an ESR-damped electrolytic tames the ring
+
+
 def test_emi_harmonics_and_limit():
     f0 = 650e3
     t = np.linspace(0, 20 / f0, 20000, endpoint=False)

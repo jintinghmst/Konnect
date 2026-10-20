@@ -146,6 +146,12 @@ pub static ALL_TOOLSETS: &[ToolsetMeta] = &[
         category: "manufacturing",
         tool_count: 3,
     },
+    ToolsetMeta {
+        name: "simulation",
+        description: "Circuit-independent simulation of the saved design: copper flow, stackup, thermal, SPICE, part checks, input network, EMI, corners, evidence-rule reports and the optimise cycle",
+        category: "simulation",
+        tool_count: 16,
+    },
 ];
 
 static TOOL_CATALOGUE: OnceLock<HashMap<&'static str, Vec<ToolDef>>> = OnceLock::new();
@@ -193,6 +199,7 @@ fn build_tools_for(name: &str) -> Option<Vec<ToolDef>> {
         "design_review" => Some(design_review::tools()),
         "templates" => Some(templates::tools()),
         "manufacturing" => Some(manufacturing::tools()),
+        "simulation" => Some(simulation::tools()),
         _ => None,
     }
 }

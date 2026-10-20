@@ -248,6 +248,8 @@ def capacitor_checks(cap: Capacitor, role: str, *, v_max: Param, irms_part: floa
                          value=irms_part, limit=val(cap.ripple_rating)))
     rise = None
     inputs = {"ESR": cap.esr_at(1e5) if cap.esr is not None else None}
+    if not loss_part_w and irms_part and cap.esr is not None:
+        loss_part_w = irms_part ** 2 * val(cap.esr_at(1e5))     # the I^2 ESR the method names
     if cap.heat_table:
         rise = Param(_interp(cap.heat_table, irms_part), "K", cap.heat_source, "self-heating")
     elif cap.ripple_rating is not None and cap.ripple_rise is not None:

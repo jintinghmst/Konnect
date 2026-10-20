@@ -221,18 +221,22 @@ class COT(_Base):
 
     A pulse starts when V_FB + ramp falls below the reference, the off-time has
     reached ``t_off_min`` and the inductor current is below the valley limit.
-    On-time adapts to keep the frequency near ``fsw``: t_on = Vout_set / (Vin fsw).
+    On-time adapts to keep the frequency near ``fsw``:
+    t_on = (Vout_set + r_comp * I_L,avg) / (Vin fsw). ``r_comp`` models the
+    loss compensation of adaptive on-time timers, which stretch the on-time as
+    conduction drops grow with load (0 = pure Vout/Vin timer).
     The ramp emulates inductor ripple: k_ramp * (I_L - lowpass(I_L)).
     ``ki`` adds an integrator on V_FB error (D-CAP3-style DC correction).
     """
 
     def __init__(self, common: Common, *, fsw: float, vout_set: float, t_off_min: float,
                  i_valley_limit: float, k_ramp: float, tau_ramp: float, t_on_min: float = 0.0,
-                 t_dead: float = 10e-9, ki: float = 0.0):
+                 t_dead: float = 10e-9, ki: float = 0.0, r_comp: float = 0.0):
         super().__init__(common)
         self.fsw, self.vout_set, self.t_off_min, self.t_on_min = fsw, vout_set, t_off_min, t_on_min
         self.i_valley, self.k_ramp, self.tau_ramp, self.t_dead, self.ki = (
             i_valley_limit, k_ramp, tau_ramp, t_dead, ki)
+        self.r_comp = r_comp
         self.il_lp = 0.0
         self.integ = 0.0
         self.t_on_start = -1.0
@@ -258,7 +262,8 @@ class COT(_Base):
         ref = self.vref_now + self.integ
         ovp = self.c.ovp_frac is not None and m.vfb > self.c.ovp_frac * self.c.vref
         ph = self.phase
-        t_on = max(self.vout_set / (max(m.vin, 0.1) * self.fsw), self.t_on_min)
+        t_on = max((self.vout_set + self.r_comp * max(self.il_lp, 0.0)) / (max(m.vin, 0.1) * self.fsw),
+                   self.t_on_min)
         if ph == "hs":
             if m.t - self.t_on_start >= t_on - EPS or ovp:
                 self.t_off_start, self.t_phase, ph = m.t, m.t, "dead_ls"

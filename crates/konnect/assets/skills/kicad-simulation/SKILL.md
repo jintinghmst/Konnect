@@ -12,9 +12,22 @@ argument-hint: "[circuit or requirement to verify]"
 
 Use this skill to answer "does this design meet its specification?" with
 evidence: numbers produced by code that can be re-run, compared with stated
-limits, and reported with every assumption visible. The assistant writes the
-simulation script; the `konnect_sim` Python package in the Konnect repository
-(`sim/`) supplies the parts that must not be re-invented per script.
+limits, and reported with every assumption visible.
+
+Start with Konnect's `simulation` toolset (`load_toolset("simulation")`). Its
+`sim_*` tools work on any design: `sim_read_schematic`, `sim_board_stackup`,
+`sim_copper_connectivity`, `sim_copper_path`, `sim_trace_coupling`,
+`sim_board_thermal`, `sim_spice_run`, `sim_capacitor_check`,
+`sim_inductor_check`, `sim_input_network`, `sim_conducted_emissions`,
+`sim_corner_sweep`, `sim_evaluate_check`, `sim_write_report`,
+`sim_cycle_record` and `sim_layout_calc`. Pass every sourced input as
+`{"value": v, "source": "..."}`; a bare number is an assumption. Board tools
+read the saved board, so refill zones and save first.
+
+For topology-specific questions the toolset does not cover yet (the
+closed-loop buck converter, switch-node stress), the assistant writes a script
+on the `konnect_sim` Python package in the Konnect repository (`sim/`), which
+supplies the parts that must not be re-invented per script.
 
 Read [`references/simulation-methods.md`](references/simulation-methods.md)
 before choosing a method or writing a testbench.
