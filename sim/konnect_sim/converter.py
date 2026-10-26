@@ -585,6 +585,15 @@ class Sim:
 
 # ── analysis ───────────────────────────────────────────────────────────────
 
+def snapshot(w: Waves, period: float, cycles: int | None = None) -> np.ndarray:
+    """A steady run as rows (t, vin, vload, il, vsw), time from zero: the input
+    ``figures.ripple_figures`` draws. Keep the whole window that ``steady`` measured (the
+    default) so the figures report the same peak-to-peak as the check; ``cycles`` keeps only
+    the last few switching periods."""
+    m = w.t >= (w.t[-1] - cycles * period if cycles else w.t[0])
+    return np.vstack([w.t[m] - w.t[m][0], w.vin[m], w.vload[m], w.il[m], w.vsw[m]])
+
+
 def cycle_average(w: Waves, x: np.ndarray, period: float) -> np.ndarray:
     """Moving average over one switching period (removes switching ripple);
     normalised at the ends so the edges are not pulled towards zero."""

@@ -120,6 +120,9 @@ class Report:
     design: str
     checks: list[Check] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # (title, image path) pairs from ``figures``; embedded after the checks, paths
+    # written relative to the report so the folder can be moved as a whole
+    figures: list[tuple[str, str]] = field(default_factory=list)
 
     def add(self, check: Check) -> Check:
         self.checks.append(check)
@@ -158,16 +161,34 @@ class Report:
             lines.append("")
         if self.notes:
             lines += ["## Notes", ""] + [f"- {n}" for n in self.notes]
+        if self.figures:
+            lines += ["", "## Figures", ""]
+            for title, path in self.figures:
+                lines += [f"### {title}", "", f"![{title}]({path})", ""]
         return "\n".join(lines) + "\n"
+
+    def _relative_figures(self, folder: Path) -> None:
+        rel = []
+        for title, path in self.figures:
+            p = Path(path)
+            try:
+                p = p.resolve().relative_to(folder.resolve())
+            except ValueError:
+                pass                              # outside the report folder: keep as given
+            rel.append((title, p.as_posix()))
+        self.figures = rel
 
     def write(self, folder: str | Path, stem: str) -> tuple[Path, Path]:
         folder = Path(folder)
         folder.mkdir(parents=True, exist_ok=True)
+        self._relative_figures(folder)
         md, js = folder / f"{stem}.md", folder / f"{stem}.json"
         md.write_text(self.to_markdown(), encoding="utf-8")
         js.write_text(json.dumps({"title": self.title, "design": self.design,
                                   "verdict": self.verdict,
                                   "checks": [asdict(c) | {"meets": c.meets, "margin": c.margin}
                                              for c in self.checks],
-                                  "notes": self.notes}, indent=2), encoding="utf-8")
+                                  "notes": self.notes,
+                                  "figures": [{"title": t, "path": p} for t, p in self.figures]},
+                                 indent=2), encoding="utf-8")
         return md, js

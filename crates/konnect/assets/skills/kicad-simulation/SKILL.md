@@ -114,6 +114,25 @@ Status rules:
 The overall verdict is FAIL if any check fails, otherwise INCOMPLETE if any
 check is incomplete, otherwise PASS.
 
+**Graph every checked quantity.** A report is not finished until each swept or
+waveform result is also drawn against its limit and embedded in the report:
+
+- Build charts with the package's `figures` module (`metric_vs_x`,
+  `waveform_grid`, `spectrum`, `bode`). For a switching converter, save
+  `converter.snapshot(w, period)` at every operating point of the steady-state
+  sweep (the whole window the check measured) and call
+  `figures.ripple_figures(..., period=period)`: one summary of output, input
+  and inductor ripple versus load per input voltage, plus waveform grids of
+  output ripple, input ripple, inductor current and switch node. Every
+  peak-to-peak value in the figures is then the one the check reported.
+- Draw every spec limit as a labelled reference line. Mark a point the model
+  cannot represent (pulse skipping, a missing model) as such; never draw it as
+  a zero.
+- Embed the figures: `Report(figures=[(title, path)])` in a script, or
+  `sim_write_report(..., figures=[{"title", "path"}])` from the toolset (the
+  `png` of `sim_board_thermal` included). Then open the PNGs and check them for
+  overlapping labels before reporting.
+
 ---
 
 ## When the result depends on the layout

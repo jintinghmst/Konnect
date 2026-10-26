@@ -31,6 +31,7 @@
 | emi | conducted DM spectrum at a LISN, limit-line margin, CM estimate, SW-to-FB mutual capacitance and coupled noise |
 | corners | tolerance vertices and Monte Carlo over sourced spreads |
 | budget | output-voltage window at the load: both limits, every contribution |
+| figures | report charts: ripple summary and waveform grids from `converter.snapshot`, metric vs sweep, spectrum vs limit, Bode; embedded through `Report(figures=...)` |
 
 ## Coverage of a buck verification
 

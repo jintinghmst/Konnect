@@ -759,6 +759,10 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         "input_transients",
         "hot_plug",
         "run_edge",
+        // kicad-simulation: chart builders of the simulation package's figures module.
+        "metric_vs_x",
+        "waveform_grid",
+        "ripple_figures",
         // kicad-sim-optimize: functions of the simulation package's layout module.
         "layer_gap_mm",
         "loop_inductance",

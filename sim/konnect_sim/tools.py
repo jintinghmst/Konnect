@@ -1,7 +1,7 @@
 """Circuit-independent simulation tools, as JSON-in / JSON-out functions.
 
-Each function here is one MCP tool of the ``konnect-sim`` server
-(``mcp_server.py``) and can also be called directly from Python. None of them
+Each function here is one ``sim_*`` tool of Konnect's ``simulation`` toolset,
+served through ``cli.py``, and can also be called directly from Python. None of them
 assumes a particular circuit: they work on any KiCad schematic or saved board.
 Topology-specific models (``buck``, ``converter``, ``losses``, ``scenarios``,
 ``stress``) stay library code for now.
@@ -412,11 +412,18 @@ def evaluate_check(name: str, requirement: str, value: float, limit: float, sens
     return _check_dict(c)
 
 
-def write_report(title: str, design: str, checks: list, out_dir: str, stem: str, notes: list | None = None) -> dict:
+def write_report(title: str, design: str, checks: list, out_dir: str, stem: str, notes: list | None = None,
+                 figures: list | None = None) -> dict:
     """Write a Markdown + JSON report from check dicts (as returned by the
-    other tools); the overall verdict follows the report rules."""
+    other tools); the overall verdict follows the report rules. ``figures``:
+    [{"title", "path"}] images (PNG) embedded after the checks, e.g. the
+    ``png`` of sim_board_thermal or charts from konnect_sim.figures."""
     fields = set(report.Check.__dataclass_fields__)
-    rep = report.Report(title, design, notes=list(notes or []))
+    figs = [(f["title"], f["path"]) for f in (figures or [])]
+    missing = [p for _, p in figs if not Path(p).is_file()]
+    if missing:
+        raise ValueError(f"figure files not found: {missing}")
+    rep = report.Report(title, design, notes=list(notes or []), figures=figs)
     for c in checks:
         rep.add(report.Check(**{k: v for k, v in c.items() if k in fields}))
     md, js = rep.write(out_dir, stem)

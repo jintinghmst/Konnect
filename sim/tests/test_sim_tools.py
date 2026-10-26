@@ -106,6 +106,46 @@ def test_report_and_cycle_roundtrip(tmp_path):
     assert d["decision"] in ("continue", "met") and d["iterations"] == 1
 
 
+def test_report_embeds_figures_relative_to_the_report(tmp_path):
+    import numpy as np
+    from konnect_sim import figures
+    period = 1 / 400e3
+    t = np.linspace(0, 3 * period, 300)
+    on = (t % period) < 0.2 * period
+    snap = np.vstack([t, 24 - 0.1 * np.sin(2 * np.pi * t / period), 5 + 0.002 * np.sin(2 * np.pi * t / period),
+                      5 + 0.7 * np.sin(2 * np.pi * t / period), np.where(on, 24.0, 0.0)])
+    idle = snap.copy(); idle[4] = 5.0                       # never switches: pulse skipping
+    snaps = {"24V_5A": snap, "24V_0A": idle}
+    figs = figures.ripple_figures(tmp_path / "figs", snaps, [24.0], [0.0, 5.0], vout_pp_max=0.03,
+                                  vin_pp_max=0.5, il_pp_target=1.5)
+    assert [t for t, _ in figs][0] == "Ripple summary" and all(Path(p).stat().st_size > 1000 for _, p in figs)
+    c1 = tools.evaluate_check("a", "<= 1", 0.5, 1.0, "max", "m", {"x": {"value": 1, "source": "s"}})
+    rep = tools.write_report("t", "d", [c1], str(tmp_path), "r",
+                             figures=[{"title": ti, "path": p} for ti, p in figs])
+    md = Path(rep["markdown"]).read_text(encoding="utf-8")
+    assert "## Figures" in md and "](figs/fig_ripple_summary.png)" in md
+    assert json.loads(Path(rep["json"]).read_text())["figures"][0]["path"] == "figs/fig_ripple_summary.png"
+    with pytest.raises(ValueError):
+        tools.write_report("t", "d", [c1], str(tmp_path), "r2", figures=[{"title": "x", "path": "nope.png"}])
+
+
+def test_ripple_figures_report_the_checked_window_not_the_drawn_cycles(tmp_path, monkeypatch):
+    import numpy as np
+    from konnect_sim import figures
+    period = 1 / 400e3
+    t = np.linspace(0, 20 * period, 4000)
+    vout = 5 + 0.002 * np.sin(2 * np.pi * t / period) + np.where(t < 2 * period, 0.004, 0.0)  # early excursion
+    snap = np.vstack([t, 24 + 0 * t, vout, 5 + 0 * t, np.where((t % period) < 0.2 * period, 24.0, 0.0)])
+    seen = {}
+    monkeypatch.setattr(figures, "metric_vs_x", lambda path, x, panels, **kw: seen.setdefault("p", panels) and str(path))
+    monkeypatch.setattr(figures, "waveform_grid", lambda path, get, **kw: seen.setdefault(Path(path).name, get) and str(path))
+    figures.ripple_figures(tmp_path, {"24V_5A": snap}, [24.0], [5.0], period=period, draw_cycles=3)
+    full = float(np.ptp(vout))
+    assert seen["p"][0]["series"]["Vin 24 V"][0] == pytest.approx(full * 1e3)
+    t_drawn, _, pp = seen["fig_ripple_vout.png"](24.0, 5.0)
+    assert pp == pytest.approx(full) and t_drawn[-1] - t_drawn[0] == pytest.approx(3 * period, rel=0.01)
+
+
 def test_rust_toolset_is_generated_from_the_current_catalog():
     p = subprocess.run([sys.executable, str(SIM / "gen_rust_toolset.py"), "--check"], capture_output=True,
                        text=True, cwd=str(SIM.parent), timeout=120)

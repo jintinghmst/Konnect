@@ -63,7 +63,12 @@ OVERRIDES = {
                            "sense": {"enum": ["max", "min"]}},
     "sim_write_report": {"checks": {"type": "array", "items": {"type": "object", "additionalProperties": True,
                                                                "description": "a check record returned by another sim_* tool"}},
-                         "notes": {"type": "array", "items": {"type": "string"}}},
+                         "notes": {"type": "array", "items": {"type": "string"}},
+                         "figures": {"type": "array", "items": {
+                             "type": "object", "additionalProperties": False,
+                             "properties": {"title": {"type": "string"},
+                                            "path": {"type": "string", "description": "PNG file to embed"}},
+                             "required": ["title", "path"]}}},
     "sim_cycle_record": {"files": {"type": "array", "items": {"type": "string"}},
                          "objectives": NUM_MAP | {"description": "{objective: value} (lower is better)"}},
     "sim_layout_calc": {"kind": {"enum": ["microstrip", "via_inductance", "via_resistance", "ipc2221_width",

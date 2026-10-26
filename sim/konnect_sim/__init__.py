@@ -28,6 +28,8 @@ in every script:
 - ``emi``     : conducted-emission and coupling estimates
 - ``corners`` : tolerance vertices and Monte Carlo
 - ``budget``  : output-voltage window at the load
+- ``figures`` : report charts: every checked quantity against its limit
+                (ripple summary and waveform grids, spectrum, Bode)
 
 Every result that a report presents as evidence carries the method that
 produced it and the assumptions it rests on. A check whose inputs are assumed
@@ -36,5 +38,5 @@ rather than sourced is reported as INCOMPLETE, never PASS.
 
 __all__ = ["spice", "netlist", "units", "report", "buck", "layout", "cycle", "stackup", "copper",
            "parts", "losses", "thermal", "converter", "scenarios", "stress", "inputfilter", "emi",
-           "corners", "budget"]
+           "corners", "budget", "figures"]
 __version__ = "0.3.0"
