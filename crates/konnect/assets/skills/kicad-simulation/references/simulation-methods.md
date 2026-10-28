@@ -32,6 +32,8 @@
 | corners | tolerance vertices and Monte Carlo over sourced spreads |
 | budget | output-voltage window at the load: both limits, every contribution |
 | figures | report charts: ripple summary and waveform grids from `converter.snapshot`, metric vs sweep, spectrum vs limit, Bode; embedded through `Report(figures=...)` |
+| document | the report as PDF (default) or Word, text and figures together: `Report.write(..., documents=...)`, `sim_write_report`, `sim_render_document` |
+| project | `Folders`: `sim/scripts`, `sim/inputs`, `sim/results/<run>`, `sim/figures/<run>`, `reports/` |
 
 ## Coverage of a buck verification
 

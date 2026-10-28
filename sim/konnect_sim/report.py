@@ -12,6 +12,7 @@ assumed. Status rules:
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
@@ -142,22 +143,22 @@ class Report:
                  f"**Overall verdict: {self.verdict}**", "",
                  "| Check | Requirement | Result | Meets | Status | Method |",
                  "|---|---|---|---|---|---|"]
+
+        def cell(text) -> str:                      # a "|" in a value must not split the row
+            return str(text).replace("|", "\\|").replace("\n", " ")
+
         for c in self.checks:
             meets = {True: "yes", False: "**no**", None: "–"}[c.meets]
             tag = " (layout)" if c.layout else ""
-            lines.append(f"| {c.name}{tag} | {c.requirement} | {c.result} | {meets} | "
-                         f"**{c.status}** | {c.method} |")
+            lines.append(f"| {cell(c.name)}{tag} | {cell(c.requirement)} | {cell(c.result)} | {meets} | "
+                         f"**{c.status}** | {cell(c.method)} |")
         lines += ["", "## Evidence and assumptions", ""]
         for c in self.checks:
             lines.append(f"### {c.name} — {c.status}")
-            if c.sources:
-                lines.append("Sources: " + "; ".join(c.sources))
-            if c.assumptions:
-                lines.append("Assumptions: " + "; ".join(c.assumptions))
-            if c.to_complete:
-                lines.append("To complete: " + c.to_complete)
-            if c.lever:
-                lines.append("Lever: " + c.lever)
+            for label, text in (("Sources", "; ".join(c.sources)), ("Assumptions", "; ".join(c.assumptions)),
+                                ("To complete", c.to_complete), ("Lever", c.lever)):
+                if text:
+                    lines.append(f"- **{label}:** {text}")
             lines.append("")
         if self.notes:
             lines += ["## Notes", ""] + [f"- {n}" for n in self.notes]
@@ -172,13 +173,15 @@ class Report:
         for title, path in self.figures:
             p = Path(path)
             try:
-                p = p.resolve().relative_to(folder.resolve())
+                p = Path(os.path.relpath(p.resolve(), folder.resolve()))
             except ValueError:
-                pass                              # outside the report folder: keep as given
+                pass                              # another drive: keep as given
             rel.append((title, p.as_posix()))
         self.figures = rel
 
-    def write(self, folder: str | Path, stem: str) -> tuple[Path, Path]:
+    def write(self, folder: str | Path, stem: str, documents=("pdf",)) -> tuple[Path, Path]:
+        """``<stem>.md`` and ``.json``, plus each of ``documents`` ("pdf", "docx") rendered
+        from the Markdown with its figures (``konnect_sim.document``)."""
         folder = Path(folder)
         folder.mkdir(parents=True, exist_ok=True)
         self._relative_figures(folder)
@@ -191,4 +194,7 @@ class Report:
                                   "notes": self.notes,
                                   "figures": [{"title": t, "path": p} for t, p in self.figures]},
                                  indent=2), encoding="utf-8")
+        if documents:
+            from . import document
+            document.render(md, documents)
         return md, js

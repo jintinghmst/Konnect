@@ -20,7 +20,7 @@ Start with Konnect's `simulation` toolset (`load_toolset("simulation")`). Its
 `sim_board_thermal`, `sim_spice_run`, `sim_capacitor_check`,
 `sim_inductor_check`, `sim_input_network`, `sim_conducted_emissions`,
 `sim_corner_sweep`, `sim_evaluate_check`, `sim_write_report`,
-`sim_cycle_record` and `sim_layout_calc`. Pass every sourced input as
+`sim_render_document`, `sim_cycle_record` and `sim_layout_calc`. Pass every sourced input as
 `{"value": v, "source": "..."}`; a bare number is an assumption. Board tools
 read the saved board, so refill zones and save first.
 
@@ -78,8 +78,23 @@ when the second is impossible, and the report says so.
 
 ### 4. Write the script
 
-- Put it in the project folder under `sim/`, named after the question
-  (`sim/buck_ripple.py`), so the user can re-run it.
+Keep every project's simulation files in the same folders (the package's
+`project.Folders` gives these paths; never mix scripts, data and charts in one
+folder):
+
+| Folder | Holds |
+|---|---|
+| `sim/scripts/` | the scripts, named after the question (`buck_ripple.py`), so the user can re-run them |
+| `sim/inputs/` | sourced inputs: fabricator stackup JSON, spec, values read from datasheets |
+| `sim/results/<run>/` | raw outputs of one run: check JSON, waveforms (CSV/NPZ), logs |
+| `sim/figures/<run>/` | that run's charts (PNG) |
+| `sim/results/cycle_log.json` | the optimisation cycle's history |
+| `reports/` | the reports people read: `.md`, `.json` and `.pdf` |
+
+`<run>` names one evaluation (`baseline`, `it1`, `it2`, ...). A script takes
+the run name as an argument and starts with
+`F = Folders.of_script(__file__, run).make()`.
+
 - Write SPICE testbenches as plain SPICE text through the package's netlist
   runner, so an engineer can read and re-run them in any SPICE simulator.
 - State every model parameter that is not from the design or a datasheet
@@ -102,7 +117,15 @@ when the second is impossible, and the report says so.
 
 Use the package's report builder. Each check carries requirement, result,
 status, method, sources, assumptions, and what would complete it. Write the
-report next to the script (`sim/<name>_report.md` and `.json`).
+report to `reports/` (`reports/<name>_report.md`, `.json` and `.pdf`):
+`Report.write` and `sim_write_report` render the PDF, text and figures
+together, by default. Add `"docx"` to `documents` when the user wants Word.
+
+A narrative engineering report (design choices, deliverables, results summary,
+recommendations) is also written in Markdown to `reports/`, with its figures
+linked from `sim/figures/<run>/` by relative path, and rendered with
+`sim_render_document` (or `document.render`). The PDF is the deliverable; the
+Markdown is its source.
 
 Status rules:
 
@@ -128,10 +151,11 @@ waveform result is also drawn against its limit and embedded in the report:
 - Draw every spec limit as a labelled reference line. Mark a point the model
   cannot represent (pulse skipping, a missing model) as such; never draw it as
   a zero.
-- Embed the figures: `Report(figures=[(title, path)])` in a script, or
+- Save charts to `sim/figures/<run>/` and embed them:
+  `Report(figures=[(title, path)])` in a script, or
   `sim_write_report(..., figures=[{"title", "path"}])` from the toolset (the
   `png` of `sim_board_thermal` included). Then open the PNGs and check them for
-  overlapping labels before reporting.
+  overlapping labels, and check the rendered PDF pages, before reporting.
 
 ---
 
@@ -166,5 +190,6 @@ reuses this skill's scripts and report rules.
 1. Never present a number without its method and source.
 2. Never turn an assumed input into a PASS.
 3. Never retype component values; extract them from the design.
-4. Keep scripts and reports in the project so results can be reproduced.
+4. Keep scripts, inputs, results, figures and reports in the project's
+   standard folders so results can be reproduced.
 5. Validate every SPICE result against an independent estimate.

@@ -35,8 +35,9 @@ Stop and report `BLOCKED` naming the missing item if any is absent:
    result: build these with the `kicad-schematic` and `kicad-pcb` skills first.
 2. A specification. Limits the user did not give stay **assumed**; the cycle
    may optimise against them but the final report keeps them assumed.
-3. A per-project simulation script in the project's `sim` folder that follows
-   the script contract below (write it with the `kicad-simulation` skill).
+3. A per-project simulation script in the project's `sim/scripts/` folder that
+   follows the script contract below (write it with the `kicad-simulation`
+   skill, which defines the project's simulation folders).
 4. KiCad running with the board open in the PCB Editor, reachable over IPC.
 
 ## Constraints and objectives
@@ -54,14 +55,16 @@ Stop and report `BLOCKED` naming the missing item if any is absent:
 
 The project script runs one full evaluation and records it in the cycle log.
 
-- Arguments: `--change "<what changed>"`, `--drc <error count>`,
-  `--erc <error count>`.
+- Arguments: `--run <name>` (`baseline`, `it1`, ...), `--change "<what changed>"`,
+  `--drc <error count>`, `--erc <error count>`.
 - It reads the schematic through the package's netlist loader and the saved board
   through its layout loader, extracts the layout parasitics, runs the closed-form
-  and SPICE checks, and writes `<stem>_report.md` / `.json`.
+  and SPICE checks, writes raw outputs to `sim/results/<run>/` and charts to
+  `sim/figures/<run>/`, and writes `reports/<stem>_<run>.md` / `.json` / `.pdf`
+  with the charts embedded.
 - Every constraint carries value, limit, sense, whether it depends on the layout,
   and its lever.
-- It appends the iteration to `<stem>_cycle.json` through the package's
+- It appends the iteration to `sim/results/cycle_log.json` through the package's
   cycle log, prints the iteration table, and ends with one line:
   `DECISION: <continue|revert|met|stalled|limit> — <reason>`.
 
@@ -141,6 +144,9 @@ act on the decision:
    constraint miss is reverted, even if an objective improves.
 
 ## Final report
+
+Write it in Markdown to `reports/`, embed the final run's charts from
+`sim/figures/<run>/`, and render the PDF with `sim_render_document`. It holds:
 
 - The iteration table from the cycle log (change, misses, worst margin,
   objectives, DRC, verdict) and the final decision.

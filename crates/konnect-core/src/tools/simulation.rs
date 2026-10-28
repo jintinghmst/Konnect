@@ -126,11 +126,21 @@ limit line [[f_hz, dBuV], ...] cited in ``limit_source``."#,
         tool!(
             "sim_write_report",
             r#"Write a Markdown + JSON report from check dicts (as returned by the
-other tools); the overall verdict follows the report rules. ``figures``:
-[{"title", "path"}] images (PNG) embedded after the checks, e.g. the
-``png`` of sim_board_thermal or charts from konnect_sim.figures."#,
-            json!({"type": "object", "properties": {"title": {"type": "string"}, "design": {"type": "string"}, "checks": {"type": "array", "items": {"type": "object", "additionalProperties": true, "description": "a check record returned by another sim_* tool"}}, "out_dir": {"type": "string"}, "stem": {"type": "string"}, "notes": {"type": "array", "items": {"type": "string"}}, "figures": {"type": "array", "items": {"type": "object", "additionalProperties": false, "properties": {"title": {"type": "string"}, "path": {"type": "string", "description": "PNG file to embed"}}, "required": ["title", "path"]}}}, "required": ["title", "design", "checks", "out_dir", "stem"]}),
+other tools), and a PDF of it with its figures; the overall verdict follows
+the report rules. ``figures``: [{"title", "path"}] images (PNG) embedded
+after the checks, e.g. the ``png`` of sim_board_thermal or charts from
+konnect_sim.figures. ``documents``: ["pdf"] (default), add "docx" for Word."#,
+            json!({"type": "object", "properties": {"title": {"type": "string"}, "design": {"type": "string"}, "checks": {"type": "array", "items": {"type": "object", "additionalProperties": true, "description": "a check record returned by another sim_* tool"}}, "out_dir": {"type": "string"}, "stem": {"type": "string"}, "notes": {"type": "array", "items": {"type": "string"}}, "figures": {"type": "array", "items": {"type": "object", "additionalProperties": false, "properties": {"title": {"type": "string"}, "path": {"type": "string", "description": "PNG file to embed"}}, "required": ["title", "path"]}}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "rendered with the figures; default [\"pdf\"]"}}, "required": ["title", "design", "checks", "out_dir", "stem"]}),
             |args, ctx| async move { handle_sim_write_report(args, ctx).await }
+        ),
+        tool!(
+            "sim_render_document",
+            r#"Render a Markdown report (an engineering write-up, or any report from
+write_report) as PDF and/or Word next to it, text and images together.
+Image paths are relative to the Markdown file. ``formats``: ["pdf"]
+(default) and/or "docx"."#,
+            json!({"type": "object", "properties": {"markdown": {"type": "string"}, "formats": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\"]"}}, "required": ["markdown"]}),
+            |args, ctx| async move { handle_sim_render_document(args, ctx).await }
         ),
         tool!(
             "sim_cycle_record",
@@ -410,10 +420,24 @@ async fn handle_sim_write_report(
         "sim_write_report",
         args,
         &[
-            "title", "design", "checks", "out_dir", "stem", "notes", "figures",
+            "title",
+            "design",
+            "checks",
+            "out_dir",
+            "stem",
+            "notes",
+            "figures",
+            "documents",
         ],
     )
     .await
+}
+
+async fn handle_sim_render_document(
+    args: &Value,
+    _ctx: &ToolContext,
+) -> anyhow::Result<CallToolResult> {
+    run_sim("sim_render_document", args, &["markdown", "formats"]).await
 }
 
 async fn handle_sim_cycle_record(

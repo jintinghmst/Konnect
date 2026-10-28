@@ -20,7 +20,7 @@ FIXTURE = SIM.parent / "crates/konnect-sexp/tests/fixtures/pic_programmer.kicad_
 
 def test_catalog_lists_every_tool_with_a_schema():
     cat = cli.catalog()
-    assert len(cat) == len(cli.TOOLS) == 16
+    assert len(cat) == len(cli.TOOLS) == 17
     for t in cat:
         assert t["name"].startswith("sim_") and t["description"]
         sch = t["input_schema"]
@@ -146,6 +146,60 @@ def test_ripple_figures_report_the_checked_window_not_the_drawn_cycles(tmp_path,
     assert pp == pytest.approx(full) and t_drawn[-1] - t_drawn[0] == pytest.approx(3 * period, rel=0.01)
 
 
+def test_documents_carry_text_tables_and_figures(tmp_path):
+    import docx
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from konnect_sim import document
+    fig_dir = tmp_path / "sim" / "figures" / "it1"
+    fig_dir.mkdir(parents=True)
+    fig, ax = plt.subplots(); ax.plot([0, 1], [0, 1]); fig.savefig(fig_dir / "line.png"); plt.close(fig)
+    md = tmp_path / "reports" / "r.md"
+    md.parent.mkdir()
+    md.write_text("# Buck report\n\nRipple is **5.7 mVpp** at 30 V, µ Ω ≤ ± °.  \nsecond line\n\n"
+                  "- one\n  - nested\n1. first\n\n| Check | Status |\n|---|---|\n| ripple | **INCOMPLETE** |\n"
+                  "| set-point | **PASS** |\n\n![Line chart](../sim/figures/it1/line.png)\n\n```\ncode block\n```\n",
+                  encoding="utf-8")
+    kinds = [b.kind for b in document.parse(md.read_text(encoding="utf-8"))]
+    assert kinds == ["heading", "para", "list", "list", "list", "table", "image", "code"]
+    out = tools.render_document(str(md), ["pdf", "docx"])
+    assert Path(out["pdf"]).read_bytes()[:5] == b"%PDF-"
+    d = docx.Document(out["docx"])
+    assert len(d.tables) == 1 and d.tables[0].cell(2, 1).text == "PASS"
+    assert len(d.inline_shapes) == 1 and "Figure 1. Line chart" in [p.text for p in d.paragraphs]
+    fitz = pytest.importorskip("fitz")
+    text = fitz.open(out["pdf"])[0].get_text()
+    assert "5.7 mVpp" in text and "µ Ω ≤ ± °" in text and "INCOMPLETE" in text and "Figure 1. Line chart" in text
+    md.write_text("![gone](nope.png)\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="nope.png"):
+        tools.render_document(str(md))
+
+
+def test_report_in_the_project_folders_links_figures_and_renders_pdf(tmp_path):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from konnect_sim.project import Folders
+    script = tmp_path / "proj" / "sim" / "scripts" / "eval.py"
+    F = Folders.of_script(script, "it2").make()
+    assert F.root == tmp_path / "proj" and F.figures == F.root / "sim/figures/it2" and F.reports.is_dir()
+    fig, ax = plt.subplots(); ax.plot([0, 1]); fig.savefig(F.figures / "a.png"); plt.close(fig)
+    c1 = tools.evaluate_check("a", "<= 1", 0.5, 1.0, "max", "m", {"x": {"value": 1, "source": "s"}})
+    rep = tools.write_report("t", "d", [c1], str(F.reports), "r", figures=[{"title": "A", "path": str(F.figures / "a.png")}])
+    assert "](../sim/figures/it2/a.png)" in Path(rep["markdown"]).read_text(encoding="utf-8")
+    assert Path(rep["pdf"]).stat().st_size > 5000 and "docx" not in rep
+
+
+def test_a_pipe_in_a_check_result_stays_in_its_table_cell(tmp_path):
+    from konnect_sim import document
+    c1 = tools.evaluate_check("pm", ">= 45", 60, 45, "min", "m", {"x": 1}, result="PM 60°; |Vx| < ripple")
+    rep = tools.write_report("t", "d", [c1], str(tmp_path), "r", documents=[])
+    table = next(b for b in document.parse(Path(rep["markdown"]).read_text(encoding="utf-8")) if b.kind == "table")
+    assert [len(r) for r in table.rows] == [6, 6] and document.plain(table.rows[1][2]) == "PM 60°; |Vx| < ripple"
+    assert "pdf" not in rep
+
+
 def test_rust_toolset_is_generated_from_the_current_catalog():
     p = subprocess.run([sys.executable, str(SIM / "gen_rust_toolset.py"), "--check"], capture_output=True,
                        text=True, cwd=str(SIM.parent), timeout=120)
@@ -160,7 +214,7 @@ def _bridge(*args, stdin=""):
 
 def test_bridge_protocol_as_konnect_calls_it():
     code, cat = _bridge("--catalog")
-    assert code == 0 and len(cat) == 16
+    assert code == 0 and len(cat) == 17
     code, out = _bridge("sim_layout_calc", stdin=json.dumps({"kind": "via_inductance",
                                                                "params": {"h_mm": 1.6, "d_mm": 0.4}}))
     assert code == 0 and out["ok"] and out["result"]["henry"] * 1e9 == pytest.approx(1.207, abs=0.01)

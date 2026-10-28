@@ -413,11 +413,12 @@ def evaluate_check(name: str, requirement: str, value: float, limit: float, sens
 
 
 def write_report(title: str, design: str, checks: list, out_dir: str, stem: str, notes: list | None = None,
-                 figures: list | None = None) -> dict:
+                 figures: list | None = None, documents: list | None = None) -> dict:
     """Write a Markdown + JSON report from check dicts (as returned by the
-    other tools); the overall verdict follows the report rules. ``figures``:
-    [{"title", "path"}] images (PNG) embedded after the checks, e.g. the
-    ``png`` of sim_board_thermal or charts from konnect_sim.figures."""
+    other tools), and a PDF of it with its figures; the overall verdict follows
+    the report rules. ``figures``: [{"title", "path"}] images (PNG) embedded
+    after the checks, e.g. the ``png`` of sim_board_thermal or charts from
+    konnect_sim.figures. ``documents``: ["pdf"] (default), add "docx" for Word."""
     fields = set(report.Check.__dataclass_fields__)
     figs = [(f["title"], f["path"]) for f in (figures or [])]
     missing = [p for _, p in figs if not Path(p).is_file()]
@@ -426,9 +427,27 @@ def write_report(title: str, design: str, checks: list, out_dir: str, stem: str,
     rep = report.Report(title, design, notes=list(notes or []), figures=figs)
     for c in checks:
         rep.add(report.Check(**{k: v for k, v in c.items() if k in fields}))
-    md, js = rep.write(out_dir, stem)
+    docs = ["pdf"] if documents is None else list(documents)
+    md, js = rep.write(out_dir, stem, documents=docs)
     counts = {s: sum(c.status == s for c in rep.checks) for s in (report.PASS, report.FAIL, report.INCOMPLETE)}
-    return {"verdict": rep.verdict, "counts": counts, "markdown": str(md), "json": str(js)}
+    return {"verdict": rep.verdict, "counts": counts, "markdown": str(md), "json": str(js),
+            **{f: str(md.with_suffix("." + f)) for f in docs}}
+
+
+def render_document(markdown: str, formats: list | None = None) -> dict:
+    """Render a Markdown report (an engineering write-up, or any report from
+    write_report) as PDF and/or Word next to it, text and images together.
+    Image paths are relative to the Markdown file. ``formats``: ["pdf"]
+    (default) and/or "docx"."""
+    from . import document
+    md = Path(markdown)
+    if not md.is_file():
+        raise ValueError(f"Markdown file not found: {md}")
+    missing = [b.path for b in document.parse(md.read_text(encoding="utf-8")) if b.kind == "image"
+               and not (Path(b.path) if Path(b.path).is_absolute() else md.parent / b.path).is_file()]
+    if missing:
+        raise ValueError(f"images not found (paths are relative to {md.parent}): {missing}")
+    return document.render(md, formats or ["pdf"])
 
 
 def cycle_record(log_path: str, report_json: str, change: str, files: list, objectives: dict,

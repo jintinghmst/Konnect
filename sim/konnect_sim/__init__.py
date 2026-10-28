@@ -30,6 +30,9 @@ in every script:
 - ``budget``  : output-voltage window at the load
 - ``figures`` : report charts: every checked quantity against its limit
                 (ripple summary and waveform grids, spectrum, Bode)
+- ``document``: render a Markdown report as PDF or Word, text and figures together
+- ``project`` : the standard folders of a project's scripts, inputs, results,
+                figures and reports
 
 Every result that a report presents as evidence carries the method that
 produced it and the assumptions it rests on. A check whose inputs are assumed
@@ -38,5 +41,5 @@ rather than sourced is reported as INCOMPLETE, never PASS.
 
 __all__ = ["spice", "netlist", "units", "report", "buck", "layout", "cycle", "stackup", "copper",
            "parts", "losses", "thermal", "converter", "scenarios", "stress", "inputfilter", "emi",
-           "corners", "budget", "figures"]
+           "corners", "budget", "figures", "document", "project"]
 __version__ = "0.3.0"

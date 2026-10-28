@@ -8,7 +8,7 @@ package for the parts that must be reliable every time.
 
 - KiCad 10 (its bundled `ngspice.dll` is the SPICE engine; set `KICAD_DIR` if
   KiCad is not in `D:\KiCad` or `C:\Program Files\KiCad\10.0`)
-- Python 3.10+: `pip install numpy scipy matplotlib scikit-rf PySpice pytest`
+- Python 3.10+: `pip install numpy scipy matplotlib scikit-rf PySpice reportlab python-docx pytest`
 
 ## Modules
 
@@ -17,7 +17,7 @@ package for the parts that must be reliable every time.
 | `spice` | Configure ngspice from KiCad; `run_netlist(text)` returns result vectors |
 | `netlist` | `load(schematic)` → components, values, nets (via kicad-cli) |
 | `units` | Parse KiCad values: `"22uF 16V"`, `"100k 0.1%"`, `"470pF DNP"` |
-| `report` | `Check` / `Report` with PASS / FAIL / INCOMPLETE rules; Markdown + JSON |
+| `report` | `Check` / `Report` with PASS / FAIL / INCOMPLETE rules; Markdown + JSON + PDF (optionally Word) |
 | `buck` | Buck design equations, a switched open-loop SPICE testbench (optionally with layout parasitics, plus an edge-resolved run for hot-loop ringing), and `layout_parasitics()` for a buck board |
 | `layout` | Read a saved `.kicad_pcb` (read-only): pads, tracks, vias, pours, stackup; copper path resistance, loop/via inductance with a plane under the loop, IPC-2221 track width |
 | `cycle` | `CycleLog`: iteration history and continue / revert / met / stalled / limit decisions for the `kicad-sim-optimize` cycle |
@@ -33,6 +33,9 @@ package for the parts that must be reliable every time.
 | `emi` | Conducted DM spectrum at a LISN, limit-line margin, CM estimate, SW-to-FB mutual capacitance and coupled noise |
 | `corners` | Tolerance vertices and Monte Carlo over sourced spreads; worst case per metric |
 | `budget` | Output-voltage window at the load, both limits, every contribution |
+| `figures` | Report charts: every checked quantity against its limit (ripple summary and waveform grids, spectrum, Bode) |
+| `document` | Render a Markdown report as PDF (reportlab) or Word (python-docx), text and figures together |
+| `project` | `Folders`: a project's `sim/scripts`, `sim/inputs`, `sim/results/<run>`, `sim/figures/<run>` and `reports/` |
 
 Every model input is a `report.Param` carrying its source; `report.check`
 derives the status from the inputs' provenance, so an assumed value or an

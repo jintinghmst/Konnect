@@ -39,6 +39,7 @@ TOOLS = {
     "sim_corner_sweep": (tools.corner_sweep, True),
     "sim_evaluate_check": (tools.evaluate_check, True),
     "sim_write_report": (tools.write_report, False),
+    "sim_render_document": (tools.render_document, False),
     "sim_cycle_record": (tools.cycle_record, False),
     "sim_layout_calc": (tools.layout_calc, True),
 }
