@@ -36,6 +36,12 @@ load_toolset("templates")
 ### Build Workflow
 
 **Step 1: Understand Requirements**
+- A new design follows the `kicad-design-flow` stages: the user must have accepted the
+  specification and the part selection first. `load_toolset("design")` and call
+  `sim_design_status(project_dir)`. Unless its `next` says the schematic stage may
+  start, stop and hand back: stages 1 and 2 are done with the user, not by this agent.
+- Use the parts in `design/02_part_selection.json` exactly. A substitution goes back to
+  the user through a revised part selection.
 - Clarify voltage rails, interfaces, constraints
 - Identify exact manufacturer parts, package suffixes, and authoritative datasheets
 - Identify key ICs and their support circuitry

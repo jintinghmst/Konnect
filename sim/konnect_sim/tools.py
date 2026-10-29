@@ -500,3 +500,49 @@ def layout_calc(kind: str, params: dict) -> dict:
     if kind == "sheet_resistance":
         return {"ohm_per_square": layout.sheet_resistance(p["copper_mm"], p.get("temp_c", 25.0))}
     raise ValueError(f"unknown kind {kind!r}")
+
+
+# ── design records: the user-approved specification and part selection ────
+
+def write_spec(project_dir: str, title: str, requirements: list, brief: str = "", notes: list | None = None,
+               change: str = "", documents: list | None = None) -> dict:
+    """Write the design specification (stage 1) as a draft for the user to
+    accept: design/01_specification.json, .md, .pdf and .docx in the KiCad
+    project folder. Each requirement: {id, category, parameter, condition (test
+    condition), criterion (pass criterion), origin (user / assumed / "standard:
+    <doc>" / "datasheet: <doc>"), rationale, verification}. Rewriting it with
+    any change starts the next draft revision; only sim_approve_record accepts it."""
+    from . import design
+    reqs = [design.Requirement(**r) for r in requirements]
+    return design.write_spec(project_dir, title, reqs, brief, notes, change,
+                             ["pdf", "docx"] if documents is None else documents)
+
+
+def write_part_selection(project_dir: str, title: str, parts: list, notes: list | None = None,
+                         change: str = "", documents: list | None = None) -> dict:
+    """Write the part selection (stage 2) as a draft for the user to accept:
+    design/02_part_selection.*. Refused until the specification is accepted.
+    Each part: {role, part (MPN), reasons [..], requirements [ids it serves],
+    manufacturer, key_values, alternatives [..], datasheet, sourcing,
+    references, risks}; every cited id must exist in the specification."""
+    from . import design
+    choices = [design.PartChoice(**p) for p in parts]
+    return design.write_parts(project_dir, title, choices, notes, change,
+                              ["pdf", "docx"] if documents is None else documents)
+
+
+def approve_record(project_dir: str, record: str, approved_by: str, statement: str,
+                   documents: list | None = None) -> dict:
+    """Record the user's acceptance of the current revision of the
+    specification or part selection. Call only after the user has accepted it
+    in their own words, and pass those words as ``statement``."""
+    from . import design
+    return design.approve(project_dir, record, approved_by, statement,
+                          ["pdf", "docx"] if documents is None else documents)
+
+
+def design_status(project_dir: str) -> dict:
+    """Where the staged design stands (specification and part selection:
+    revision, draft or accepted) and the next step it allows."""
+    from . import design
+    return design.status(project_dir)

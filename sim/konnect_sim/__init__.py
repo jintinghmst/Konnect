@@ -32,7 +32,9 @@ in every script:
                 (ripple summary and waveform grids, spectrum, Bode)
 - ``document``: render a Markdown report as PDF or Word, text and figures together
 - ``project`` : the standard folders of a project's scripts, inputs, results,
-                figures and reports
+                figures, reports and design records
+- ``design``  : the specification and part selection, each a draft until the
+                user approves it
 
 Every result that a report presents as evidence carries the method that
 produced it and the assumptions it rests on. A check whose inputs are assumed
@@ -41,5 +43,5 @@ rather than sourced is reported as INCOMPLETE, never PASS.
 
 __all__ = ["spice", "netlist", "units", "report", "buck", "layout", "cycle", "stackup", "copper",
            "parts", "losses", "thermal", "converter", "scenarios", "stress", "inputfilter", "emi",
-           "corners", "budget", "figures", "document", "project"]
+           "corners", "budget", "figures", "document", "project", "design"]
 __version__ = "0.3.0"

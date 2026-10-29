@@ -20,7 +20,9 @@ Start with Konnect's `simulation` toolset (`load_toolset("simulation")`). Its
 `sim_board_thermal`, `sim_spice_run`, `sim_capacitor_check`,
 `sim_inductor_check`, `sim_input_network`, `sim_conducted_emissions`,
 `sim_corner_sweep`, `sim_evaluate_check`, `sim_write_report`,
-`sim_render_document`, `sim_cycle_record` and `sim_layout_calc`. Pass every sourced input as
+`sim_render_document`, `sim_cycle_record` and `sim_layout_calc`. The design
+records of `kicad-design-flow` (`sim_write_spec`, `sim_design_status`, ...) are
+in the separate `design` toolset. Pass every sourced input as
 `{"value": v, "source": "..."}`; a bare number is an assumption. Board tools
 read the saved board, so refill zones and save first.
 
@@ -42,9 +44,15 @@ radiated emissions, crosstalk, filter attenuation or a pre-compliance plan
 
 ### 1. Pin down the requirement
 
-List each requirement as a measurable limit with its source: user, product
-spec, or component datasheet (with document number and table). If the user
-gives no limit, propose one, mark it **assumed**, and keep it assumed in the
+If the project has an accepted specification (`design/01_specification.json`,
+from the `kicad-design-flow` skill), it is the list: one check per requirement,
+named `R-xx <category>`, with the limit cited as
+`design/01_specification.json R-xx rev N (accepted)`. The user accepted it, so it
+is a sourced limit.
+
+Otherwise list each requirement as a measurable limit with its source: user,
+product spec, or component datasheet (with document number and table). If the
+user gives no limit, propose one, mark it **assumed**, and keep it assumed in the
 report. A check against an assumed limit is `INCOMPLETE`, never PASS.
 
 ### 2. Extract the design, never retype it

@@ -152,6 +152,12 @@ pub static ALL_TOOLSETS: &[ToolsetMeta] = &[
         category: "simulation",
         tool_count: 17,
     },
+    ToolsetMeta {
+        name: "design",
+        description: "Staged design records approved by the user: the specification (requirements with test condition and pass criterion) and the part selection with reasons",
+        category: "project",
+        tool_count: 4,
+    },
 ];
 
 static TOOL_CATALOGUE: OnceLock<HashMap<&'static str, Vec<ToolDef>>> = OnceLock::new();
@@ -200,6 +206,7 @@ fn build_tools_for(name: &str) -> Option<Vec<ToolDef>> {
         "templates" => Some(templates::tools()),
         "manufacturing" => Some(manufacturing::tools()),
         "simulation" => Some(simulation::tools()),
+        "design" => Some(simulation::design_tools()),
         _ => None,
     }
 }

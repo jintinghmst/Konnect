@@ -20,7 +20,7 @@ FIXTURE = SIM.parent / "crates/konnect-sexp/tests/fixtures/pic_programmer.kicad_
 
 def test_catalog_lists_every_tool_with_a_schema():
     cat = cli.catalog()
-    assert len(cat) == len(cli.TOOLS) == 17
+    assert len(cat) == len(cli.TOOLS) == 21
     for t in cat:
         assert t["name"].startswith("sim_") and t["description"]
         sch = t["input_schema"]
@@ -214,7 +214,7 @@ def _bridge(*args, stdin=""):
 
 def test_bridge_protocol_as_konnect_calls_it():
     code, cat = _bridge("--catalog")
-    assert code == 0 and len(cat) == 17
+    assert code == 0 and len(cat) == 21
     code, out = _bridge("sim_layout_calc", stdin=json.dumps({"kind": "via_inductance",
                                                                "params": {"h_mm": 1.6, "d_mm": 0.4}}))
     assert code == 0 and out["ok"] and out["result"]["henry"] * 1e9 == pytest.approx(1.207, abs=0.01)
@@ -224,3 +224,35 @@ def test_bridge_protocol_as_konnect_calls_it():
     assert not out["ok"] and out["error"]["kind"] == "unknown_tool"
     code, out = _bridge("sim_layout_calc", stdin="{not json")
     assert code == 2 and out["error"]["kind"] == "invalid_json"
+
+
+def test_design_records_hold_the_user_gates(tmp_path):
+    import docx
+    req = lambda i, cat, crit: {"id": i, "category": cat, "parameter": cat, "condition": "Vin 9-36 V, Iout 0-5 A",
+                                "criterion": crit, "origin": "assumed", "verification": "sim_spice_run; bench"}
+    spec = [req("R-01", "Input range", "9-36 V"), req("R-02", "Output ripple", "<= 50 mVpp")]
+    part = {"role": "Buck IC", "part": "LM76005", "reasons": ["36 V input, 5 A"], "requirements": ["R-01"]}
+    with pytest.raises(ValueError):                     # parts before an accepted spec
+        tools.write_part_selection(str(tmp_path), "Buck", [part])
+    with pytest.raises(ValueError):                     # an origin outside the evidence vocabulary
+        tools.write_spec(str(tmp_path), "Buck", [spec[0] | {"origin": "guess"}])
+    out = tools.write_spec(str(tmp_path), "Buck", spec, brief="24 V to 5 V")
+    assert out["revision"] == 1 and out["status"] == "draft" and Path(out["pdf"]).read_bytes()[:5] == b"%PDF-"
+    assert docx.Document(out["docx"]).tables[0].cell(2, 4).text == "<= 50 mVpp"
+    assert "wait for the user" in tools.design_status(str(tmp_path))["next"]
+    with pytest.raises(ValueError):                     # approval needs the user's words
+        tools.approve_record(str(tmp_path), "specification", "user", " ")
+    assert tools.approve_record(str(tmp_path), "specification", "user", "accept", documents=[])["status"] == "accepted"
+    assert tools.write_spec(str(tmp_path), "Buck", spec, brief="24 V to 5 V", documents=[])["status"] == "accepted"
+    with pytest.raises(ValueError):                     # an unknown requirement id
+        tools.write_part_selection(str(tmp_path), "Buck", [part | {"requirements": ["R-09"]}], documents=[])
+    p = tools.write_part_selection(str(tmp_path), "Buck", [part], documents=[])
+    assert p["requirements_not_cited"] == ["R-02"]
+    tools.approve_record(str(tmp_path), "part_selection", "user", "parts ok", documents=[])
+    # revising the spec reopens it and the parts built on it
+    r = tools.write_spec(str(tmp_path), "Buck", spec + [req("R-03", "Efficiency", ">= 90 %")], change="add R-03",
+                         documents=[])
+    assert r["revision"] == 2 and r["status"] == "draft" and r["part_selection_reopened"]
+    with pytest.raises(ValueError):                     # parts still cite spec revision 1
+        tools.approve_record(str(tmp_path), "part_selection", "user", "ok", documents=[])
+    assert "specification is a draft" in tools.design_status(str(tmp_path))["next"]

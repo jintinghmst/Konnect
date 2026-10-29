@@ -7,6 +7,7 @@
       sim/figures/<run>/    the charts of that run (PNG)
       sim/results/cycle_log.json   the optimisation cycle's history, across runs
       reports/              the reports people read: <stem>.md / .json / .pdf (+ .docx)
+      design/               the user-approved design records: specification, part selection
 
 A script finds its project from its own location:
 
@@ -58,7 +59,11 @@ class Folders:
     def reports(self) -> Path:
         return self.root / "reports"
 
+    @property
+    def design(self) -> Path:
+        return self.root / "design"
+
     def make(self) -> "Folders":
-        for p in (self.scripts, self.inputs, self.results, self.figures, self.reports):
+        for p in (self.scripts, self.inputs, self.results, self.figures, self.reports, self.design):
             p.mkdir(parents=True, exist_ok=True)
         return self

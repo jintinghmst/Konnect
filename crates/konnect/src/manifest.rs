@@ -40,6 +40,20 @@ pub const SKILLS: &[SkillManifest] = &[
         )],
     },
     SkillManifest {
+        name: "kicad-design-flow",
+        content: include_str!("../assets/skills/kicad-design-flow/SKILL.md"),
+        references: &[
+            (
+                "spec-catalogue.md",
+                include_str!("../assets/skills/kicad-design-flow/references/spec-catalogue.md"),
+            ),
+            (
+                "part-selection.md",
+                include_str!("../assets/skills/kicad-design-flow/references/part-selection.md"),
+            ),
+        ],
+    },
+    SkillManifest {
         name: "kicad-schematic",
         content: include_str!("../assets/skills/kicad-schematic/SKILL.md"),
         references: &[

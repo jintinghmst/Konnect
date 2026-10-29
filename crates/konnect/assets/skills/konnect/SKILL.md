@@ -44,6 +44,9 @@ Before a mutation, a dependent check, a retry, or a completion claim, read
 recovery rules to the fields this installed server actually returns. Guidance
 does not establish that a missing server-side check ran.
 
+A request to design a new circuit or board follows the `kicad-design-flow` skill:
+specification, then part selection, each accepted by the user before the next stage.
+
 1. **Identify the project** — locate the `.kicad_pro` file
 2. **Classify the task** — read-only (Channel 2 or 3) or write (Channel 1)
 3. **Verify MCP is connected** — call `list_toolboxes` to confirm tools are available

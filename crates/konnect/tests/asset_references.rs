@@ -767,6 +767,9 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         // (`Folders.of_script`, `sim/results/cycle_log.json`).
         "of_script",
         "cycle_log",
+        "requirements_not_cited",
+        "part_selection",
+        "key_values",
         // kicad-sim-optimize: functions of the simulation package's layout module.
         "layer_gap_mm",
         "loop_inductance",

@@ -23,7 +23,8 @@ import typing
 
 from . import tools
 
-# tool name -> function; read_only says whether the tool writes files
+# tool name -> function; read_only says whether the tool writes files. Konnect serves the
+# design records (sim_write_spec ... sim_design_status) as its separate `design` toolset.
 TOOLS = {
     "sim_read_schematic": (tools.read_schematic, True),
     "sim_board_stackup": (tools.board_stackup, True),
@@ -42,6 +43,10 @@ TOOLS = {
     "sim_render_document": (tools.render_document, False),
     "sim_cycle_record": (tools.cycle_record, False),
     "sim_layout_calc": (tools.layout_calc, True),
+    "sim_write_spec": (tools.write_spec, False),
+    "sim_write_part_selection": (tools.write_part_selection, False),
+    "sim_approve_record": (tools.approve_record, False),
+    "sim_design_status": (tools.design_status, True),
 }
 
 SOURCED = {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"},
