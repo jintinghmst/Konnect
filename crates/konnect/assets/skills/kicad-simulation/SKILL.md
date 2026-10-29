@@ -30,7 +30,11 @@ on the `konnect_sim` Python package in the Konnect repository (`sim/`), which
 supplies the parts that must not be re-invented per script.
 
 Read [`references/simulation-methods.md`](references/simulation-methods.md)
-before choosing a method or writing a testbench.
+before choosing a method or writing a testbench, and
+[`references/spec-and-emc-estimates.md`](references/spec-and-emc-estimates.md)
+when writing a specification or checking PDN target impedance, conducted or
+radiated emissions, crosstalk, filter attenuation or a pre-compliance plan
+(textbook relations with citations, mapped to the `sim_*` tools).
 
 ---
 
@@ -65,7 +69,9 @@ traceable to the design file or a cited document.
 | Switch-node and pin voltage stress | Edge-resolved SPICE run plus `stress` limits with durations |
 | Copper resistance, ground connectivity, current density, via current | Filled-copper solve (`copper`) |
 | Inductor, capacitor, loss, efficiency and temperature | Manufacturer data through `parts`, `losses`, `thermal` |
-| Input-filter interaction, hot-plug, conducted EMI, SW-to-FB coupling | `inputfilter`, `emi` (pre-compliance estimates) |
+| Input-filter interaction, hot-plug, conducted EMI, SW-to-FB coupling | `inputfilter`, `emi` (pre-compliance estimates); Ott's common- and differential-mode envelopes as the second method |
+| PDN impedance against the target impedance | SPICE AC sweep with a 1 A source at the IC node |
+| Radiated emission, cable common-mode current | Ott's loop and cable estimates from extracted loop area (design direction only, never compliance) |
 | Impedance, crosstalk, via transitions | Field solver (not available yet) |
 
 [`references/simulation-methods.md`](references/simulation-methods.md) maps

@@ -17,6 +17,10 @@ specification, the component datasheets, the ordered stackup and a field solver
 (see [`trace-width-table.md`](trace-width-table.md)). A missing input makes the
 decision `INCOMPLETE`; do not substitute a remembered number.
 
+For the physics behind these rules (return-current spread, plane slots and
+splits, stackup coupling, crosstalk mechanisms) with textbook citations, read
+[`emc-layout.md`](emc-layout.md).
+
 ## 1. Decide whether a net is a transmission line
 
 A trace behaves as a transmission line once its edge rate is fast compared with

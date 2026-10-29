@@ -51,6 +51,16 @@ pub const SKILLS: &[SkillManifest] = &[
                 "wiring-patterns.md",
                 include_str!("../assets/skills/kicad-schematic/references/wiring-patterns.md"),
             ),
+            (
+                "emc-schematic.md",
+                include_str!("../assets/skills/kicad-schematic/references/emc-schematic.md"),
+            ),
+            (
+                "component-selection-emc.md",
+                include_str!(
+                    "../assets/skills/kicad-schematic/references/component-selection-emc.md"
+                ),
+            ),
         ],
     },
     SkillManifest {
@@ -72,6 +82,10 @@ pub const SKILLS: &[SkillManifest] = &[
             (
                 "high-speed-design.md",
                 include_str!("../assets/skills/kicad-pcb/references/high-speed-design.md"),
+            ),
+            (
+                "emc-layout.md",
+                include_str!("../assets/skills/kicad-pcb/references/emc-layout.md"),
             ),
         ],
     },
@@ -111,10 +125,18 @@ pub const SKILLS: &[SkillManifest] = &[
     SkillManifest {
         name: "kicad-simulation",
         content: include_str!("../assets/skills/kicad-simulation/SKILL.md"),
-        references: &[(
-            "simulation-methods.md",
-            include_str!("../assets/skills/kicad-simulation/references/simulation-methods.md"),
-        )],
+        references: &[
+            (
+                "simulation-methods.md",
+                include_str!("../assets/skills/kicad-simulation/references/simulation-methods.md"),
+            ),
+            (
+                "spec-and-emc-estimates.md",
+                include_str!(
+                    "../assets/skills/kicad-simulation/references/spec-and-emc-estimates.md"
+                ),
+            ),
+        ],
     },
     SkillManifest {
         name: "kicad-sim-optimize",

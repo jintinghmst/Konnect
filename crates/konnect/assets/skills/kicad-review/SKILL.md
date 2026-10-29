@@ -63,6 +63,9 @@ unknown and `owner` is `null`; corroborate with
 - Read [`references/design-checklist.md`](references/design-checklist.md) for a
   comprehensive or pre-fabrication review. Mark an item only from evidence
   collected in this run.
+- For an EMC review, also check against the kicad-schematic skill's
+  `references/emc-schematic.md` and the kicad-pcb skill's
+  `references/emc-layout.md`; both carry textbook checklists with citations.
 - Read [`references/error-taxonomy.md`](references/error-taxonomy.md) when
   classifying a finding or assigning the final verdict. Direct ERC, DRC, and
   connectivity evidence outrank heuristic classifications.

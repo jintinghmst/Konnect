@@ -19,8 +19,14 @@
 - [ ] ADC reference has dedicated decoupling
 - [ ] High-speed nets identified by edge rate; termination (series, parallel or AC) chosen from driver, receiver and edge rate
 
+### EMC (Ott, *Electromagnetic Compatibility Engineering*; see kicad-schematic `references/emc-schematic.md`)
+- [ ] One ground reference; mixed-signal AGND/DGND pins to analog ground unless the datasheet says otherwise
+- [ ] Decoupling sized (C ≥ dI·dt/dV), smallest practical package, few distinct values
+- [ ] Power-entry filter with differential- and common-mode sections; bead not saturated at DC current
+- [ ] RFI filters on low-level and cable-connected inputs
+
 ### Protection
-- [ ] ESD protection on external-facing interfaces (USB, Ethernet, GPIO headers)
+- [ ] ESD protection on external-facing interfaces (USB, Ethernet, GPIO headers), returned to chassis or I/O ground
 - [ ] TVS diodes on power inputs (if external power)
 - [ ] Current limiting resistors on LEDs
 - [ ] Gate resistors on MOSFET drivers (prevent ringing)
@@ -46,6 +52,13 @@
 - [ ] No acute angles on traces (acid traps)
 - [ ] Via-in-pad only where needed (adds cost)
 - [ ] Ground pour on back (or both sides)
+
+### EMC Layout (see kicad-pcb `references/emc-layout.md`)
+- [ ] Every signal layer adjacent to a plane; signal-to-plane spacing from the ordered stackup
+- [ ] No slots in ground planes; no trace crosses a split on an adjacent layer (stitching capacitor if unavoidable)
+- [ ] Return via beside each layer change of a fast or high-current net
+- [ ] Decoupling mounted for minimum loop inductance (side vias, short connections)
+- [ ] Switching-regulator high-di/dt loops minimal; filter and ESD parts at their connectors
 
 ### High-Speed / Signal Integrity
 See `kicad-pcb/references/high-speed-design.md`.

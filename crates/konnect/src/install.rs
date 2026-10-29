@@ -1739,9 +1739,9 @@ mod tests {
         run_install_at(InstallClient::Claude, &paths, false).unwrap();
 
         let claude = inspect_guidance(InstallClient::Claude, &paths, &this_exe());
-        // 8 SKILL.md + 13 reference files + 2 agents, and 4 hooks: the counts
+        // 8 SKILL.md + 17 reference files + 2 agents, and 4 hooks: the counts
         // `konnect init` reports, restated rather than read from the manifest.
-        assert_eq!(claude.files.len(), 23);
+        assert_eq!(claude.files.len(), 27);
         assert_eq!(claude.hooks.len(), 4);
         for file in &claude.files {
             assert_eq!(file.status, ItemStatus::Current, "{}", file.name);
@@ -2090,7 +2090,7 @@ mod tests {
         .unwrap();
         let codex = inspect_guidance(InstallClient::Codex, &paths, &this_exe());
         assert!(codex.hooks.is_empty());
-        assert_eq!(codex.files.len(), 21);
+        assert_eq!(codex.files.len(), 25);
         assert_eq!(file_status(&codex, "kicad-library/SKILL.md"), "missing");
         let notice = codex.notice().unwrap();
         assert!(notice.starts_with("Konnect Codex guidance"), "{notice}");

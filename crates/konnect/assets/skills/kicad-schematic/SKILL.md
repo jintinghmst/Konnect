@@ -43,6 +43,14 @@ Read [`references/common-lib-ids.md`](references/common-lib-ids.md) when choosin
 a common generic KiCad symbol. It is a quick-start index, not an allowlist;
 search the active libraries when the required part is absent or package-specific.
 
+Read [`references/emc-schematic.md`](references/emc-schematic.md) before drawing
+power distribution, decoupling, power-entry filters, cable interfaces, ESD
+protection or any mixed-signal (ADC/DAC) circuit, and
+[`references/component-selection-emc.md`](references/component-selection-emc.md)
+when choosing capacitors, ferrite beads, chokes, filter, ESD/TVS or termination
+parts. Both are condensed from the SI/PI textbooks (Ott, *Electromagnetic
+Compatibility Engineering*; *Digital Signal Integrity*) with citations.
+
 ### Workflow
 
 1. Search the library first: use `search_symbols` to find the correct lib_id
@@ -237,7 +245,7 @@ multi-unit component can report both.
 ## Common Patterns
 
 ### Decoupling Capacitor
-Place 100nF cap (Device:C) within 5mm of IC power pin. Connect one pin to VCC via power symbol, other pin to GND via power symbol. One cap per VCC/VDD pin. For fast devices, take values and counts from the datasheet instead (see High-Speed Nets at Schematic Stage).
+Place 100nF cap (Device:C) within 5mm of IC power pin. Connect one pin to VCC via power symbol, other pin to GND via power symbol. One cap per VCC/VDD pin. For fast devices, take values and counts from the datasheet instead (see High-Speed Nets at Schematic Stage). Size and choose decoupling by `references/emc-schematic.md` §3: C ≥ dI·dt/dV, smallest practical package, few distinct values (values a decade apart create anti-resonance peaks).
 
 ### Pull-up Resistor
 Place resistor (Device:R) vertically. Connect one pin to the signal net via `connect_to_net`, other pin to VCC via `add_power_symbol`. Typical values: 4.7k for I2C, 10k for general.
@@ -249,7 +257,7 @@ Two resistors in series, vertically aligned. Top to input net, middle junction t
 Resistor in series with LED. Connect resistor to signal/power, resistor to LED anode, LED cathode to GND. R = (Vsupply - Vf) / If. Typical: 330R for 3.3V, 470R for 5V.
 
 ### Bypass/Decoupling Filter
-For analog circuits: 100nF ceramic + 10uF electrolytic in parallel, close to power pins. Place ceramic closest to IC.
+For analog circuits: 100nF ceramic + 10uF bulk (MLCC or tantalum) in parallel, close to power pins. Place ceramic closest to IC. Ott advises against aluminium electrolytics for board-level bulk decoupling (inductance an order of magnitude higher); see `references/component-selection-emc.md`.
 
 ### Crystal Oscillator
 Crystal (Device:Crystal) between XI and XO pins. Two load capacitors from each crystal pin to GND. Typical load caps: 12-22pF. Optional 1M feedback resistor across crystal.

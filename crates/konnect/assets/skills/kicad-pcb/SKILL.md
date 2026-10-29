@@ -86,6 +86,11 @@ Always call `get_active_toolsets()` first to see what is already loaded.
 - Read [`references/high-speed-design.md`](references/high-speed-design.md)
   before placing, routing or choosing a stackup for any interface faster than
   ordinary GPIO, or a device in a flip-chip BGA package.
+- Read [`references/emc-layout.md`](references/emc-layout.md) before choosing a
+  stackup, placing decoupling, filter or ESD parts, pouring planes, or laying out
+  switching regulators, clocks, cable interfaces or mixed-signal circuits:
+  return paths, plane slots and splits, decoupling loop inductance, crosstalk,
+  from the SI/PI textbooks with citations.
 
 ---
 
@@ -133,7 +138,9 @@ Do NOT add copper pours before routing is complete — they interfere with inter
 
 - Group components by functional block (power, digital, analog, connectors)
 - Place ICs first, then their associated passives
-- Decoupling caps: within 2mm of their IC power pins, on same layer
+- Decoupling caps: within 2mm of their IC power pins, on same layer, mounted
+  for the smallest loop (side vias, short connections; see
+  `references/emc-layout.md` §4)
 - Cable/EMI filter caps: on the connector's own pins, and judged against that
   connector rather than the nearest IC
 - Connectors: at board edges, accessible for cables
