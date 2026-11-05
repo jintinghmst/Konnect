@@ -46,7 +46,9 @@ OVERRIDES = {
     "sim_spice_run": {"measures": {"type": "array", "items": {"type": "object", "properties": {
         "vector": {"type": "string"}, "kind": {"enum": ["max", "min", "avg", "pp", "rms", "final", "at"]},
         "t_from": {"type": "number"}, "t_to": {"type": "number"}, "at": {"type": "number"}},
-        "required": ["vector", "kind"]}}},
+        "required": ["vector", "kind"]}},
+                      "plot": {"type": "array", "items": {"type": "string"},
+                               "description": "vectors to graph; default the measured ones"}},
     "sim_capacitor_check": {"dc_bias": POINTS | {"description": "[[V, C/C_nom], ...] manufacturer curve"}},
     "sim_inductor_check": {"l_vs_i": POINTS | {"description": "[[A, H], ...] manufacturer curve"},
                            "core_loss_table": POINTS | {"description": "[[f_hz, dI_pp_A, W], ...]"}},

@@ -22,11 +22,13 @@ in the KiCad project folder:
 
 | File | Stage |
 |---|---|
-| `design/01_specification.json` / `.md` / `.pdf` / `.docx` | 1. Specification |
-| `design/02_part_selection.json` / `.md` / `.pdf` / `.docx` | 2. Part selection |
-| `reports/`, `sim/` | 5. Verification (`kicad-simulation`) |
+| `design/01_specification.pdf` | 1. Specification |
+| `design/02_part_selection.pdf` | 2. Part selection |
+| `reports/<name>.pdf`, `sim/` | 5. Verification (`kicad-simulation`) |
 
-The JSON is the source of truth; the PDF and Word files are what the user reads.
+The user reads the PDFs; Word is added (`documents=["pdf", "docx"]`) only when
+they ask. Each record's JSON, the source of truth the tools read, is kept apart in
+`design/records/`.
 `sim_design_status` says where a design stands; call it first when resuming one.
 
 ## The gates
@@ -99,7 +101,7 @@ On the reply:
 - **Acceptance:** `sim_approve_record(record="specification", approved_by=..., statement="<their words>")`.
 
 After acceptance, every criterion is the user's limit. Downstream checks cite it as
-`design/01_specification.json R-xx rev N (accepted)`: a sourced limit under the
+`design/records/01_specification.json R-xx rev N (accepted)`: a sourced limit under the
 `kicad-simulation` evidence rule, whatever its original origin.
 
 ## Stage 2: part selection

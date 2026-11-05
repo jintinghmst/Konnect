@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 SIM = Path(__file__).resolve().parents[1]
@@ -120,11 +121,15 @@ def test_report_embeds_figures_relative_to_the_report(tmp_path):
                                   vin_pp_max=0.5, il_pp_target=1.5)
     assert [t for t, _ in figs][0] == "Ripple summary" and all(Path(p).stat().st_size > 1000 for _, p in figs)
     c1 = tools.evaluate_check("a", "<= 1", 0.5, 1.0, "max", "m", {"x": {"value": 1, "source": "s"}})
-    rep = tools.write_report("t", "d", [c1], str(tmp_path), "r",
+    rep = tools.write_report("t", "d", [c1], str(tmp_path), "r", documents=["md"],
                              figures=[{"title": ti, "path": p} for ti, p in figs])
-    md = Path(rep["markdown"]).read_text(encoding="utf-8")
-    assert "## Figures" in md and "](figs/fig_ripple_summary.png)" in md
-    assert json.loads(Path(rep["json"]).read_text())["figures"][0]["path"] == "figs/fig_ripple_summary.png"
+    md = Path(rep["md"]).read_text(encoding="utf-8")
+    assert "## Further figures" in md and "](figs/fig_ripple_summary.png)" in md
+    assert "](r_figures/r_checks_vs_limits.png)" in md                 # every report opens with its checks chart
+    js = json.loads(Path(rep["json"]).read_text())
+    assert Path(rep["json"]).parent == tmp_path / "r_data"              # data kept out of the report's folder
+    assert js["summary_figure"] == str((tmp_path / "r_figures/r_checks_vs_limits.png").resolve())
+    assert js["figures"][0]["path"] == str((tmp_path / "figs/fig_ripple_summary.png").resolve())
     with pytest.raises(ValueError):
         tools.write_report("t", "d", [c1], str(tmp_path), "r2", figures=[{"title": "x", "path": "nope.png"}])
 
@@ -187,16 +192,22 @@ def test_report_in_the_project_folders_links_figures_and_renders_pdf(tmp_path):
     fig, ax = plt.subplots(); ax.plot([0, 1]); fig.savefig(F.figures / "a.png"); plt.close(fig)
     c1 = tools.evaluate_check("a", "<= 1", 0.5, 1.0, "max", "m", {"x": {"value": 1, "source": "s"}})
     rep = tools.write_report("t", "d", [c1], str(F.reports), "r", figures=[{"title": "A", "path": str(F.figures / "a.png")}])
-    assert "](../sim/figures/it2/a.png)" in Path(rep["markdown"]).read_text(encoding="utf-8")
-    assert Path(rep["pdf"]).stat().st_size > 5000 and "docx" not in rep
+    assert Path(rep["pdf"]).stat().st_size > 5000 and "docx" not in rep and "md" not in rep
+    assert sorted(x.name for x in F.reports.iterdir()) == ["r.pdf"]       # the reports folder holds only the PDF
+    assert Path(rep["json"]) == F.root / "sim/results/r/r.json"
+    fitz = pytest.importorskip("fitz")
+    text = "".join(pg.get_text() for pg in fitz.open(rep["pdf"]))
+    # summary first, then the tests, then figures not tied to a test
+    assert text.index("Overall verdict: PASS") < text.index("Results by test") < text.index("1. a: PASS") \
+        < text.index("Further figures")
 
 
 def test_a_pipe_in_a_check_result_stays_in_its_table_cell(tmp_path):
     from konnect_sim import document
     c1 = tools.evaluate_check("pm", ">= 45", 60, 45, "min", "m", {"x": 1}, result="PM 60°; |Vx| < ripple")
     rep = tools.write_report("t", "d", [c1], str(tmp_path), "r", documents=[])
-    table = next(b for b in document.parse(Path(rep["markdown"]).read_text(encoding="utf-8")) if b.kind == "table")
-    assert [len(r) for r in table.rows] == [6, 6] and document.plain(table.rows[1][2]) == "PM 60°; |Vx| < ripple"
+    table = next(b for b in document.parse(Path(rep["md"]).read_text(encoding="utf-8")) if b.kind == "table")
+    assert [len(r) for r in table.rows] == [6, 6] and document.plain(table.rows[1][3]) == "PM 60°; |Vx| < ripple"
     assert "pdf" not in rep
 
 
@@ -236,9 +247,11 @@ def test_design_records_hold_the_user_gates(tmp_path):
         tools.write_part_selection(str(tmp_path), "Buck", [part])
     with pytest.raises(ValueError):                     # an origin outside the evidence vocabulary
         tools.write_spec(str(tmp_path), "Buck", [spec[0] | {"origin": "guess"}])
-    out = tools.write_spec(str(tmp_path), "Buck", spec, brief="24 V to 5 V")
+    out = tools.write_spec(str(tmp_path), "Buck", spec, brief="24 V to 5 V", documents=["pdf", "docx"])
     assert out["revision"] == 1 and out["status"] == "draft" and Path(out["pdf"]).read_bytes()[:5] == b"%PDF-"
     assert docx.Document(out["docx"]).tables[0].cell(2, 4).text == "<= 50 mVpp"
+    assert sorted(x.name for x in (tmp_path / "design").iterdir()) == [
+        "01_specification.docx", "01_specification.pdf", "records"]
     assert "wait for the user" in tools.design_status(str(tmp_path))["next"]
     with pytest.raises(ValueError):                     # approval needs the user's words
         tools.approve_record(str(tmp_path), "specification", "user", " ")
@@ -256,3 +269,59 @@ def test_design_records_hold_the_user_gates(tmp_path):
     with pytest.raises(ValueError):                     # parts still cite spec revision 1
         tools.approve_record(str(tmp_path), "part_selection", "user", "ok", documents=[])
     assert "specification is a draft" in tools.design_status(str(tmp_path))["next"]
+
+
+def _png(fig) -> bool:
+    return Path(fig["path"]).read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" and fig["title"]
+
+
+def test_every_simulation_tool_draws_its_result(tmp_path):
+    d = str(tmp_path)
+    runs = {
+        "spice ac": tools.spice_run("rc\nV1 a 0 DC 0 AC 1\nR1 a out 1k\nC1 out 0 10n\n.ac dec 20 10 1meg\n.end",
+                                    [{"vector": "out", "kind": "at", "at": 15.9e3}], figures_dir=d),
+        "spice tran": tools.spice_run("step\nV1 a 0 PULSE(0 1 0 1n 1n 1 2)\nR1 a out 1k\nC1 out 0 1n\n"
+                                      ".tran 10n 5u\n.end", [{"vector": "out", "kind": "max"},
+                                                             {"vector": "out", "kind": "avg"}], figures_dir=d),
+        "corners": tools.corner_sweep([{"name": "L", "nom": 3.3e-6, "tol": 0.2}, {"name": "f", "nom": 6e5, "tol": 0.1}],
+                                      {"di": "7 * 0.42 / (L * f)"}, figures_dir=d),
+        "cap curve": tools.capacitor_check("C", 22e-6, 0.1, 16, 2, "out", 5.5, 5, dc_bias=[[0, 1], [5, 0.6], [16, 0.3]],
+                                           dc_bias_source="vendor curve", figures_dir=d),
+        "cap no curve": tools.capacitor_check("C", 4.7e-6, 0.1, 100, 3, "in", 30, 24, figures_dir=d),
+        "inductor": tools.inductor_check("L", 4.7e-6, 0.2, 0.01, 0.012, 5, 1.5, 6.5, 4e5, 25, isat_a=8,
+                                         l_vs_i=[[0, 4.7e-6], [6, 4.2e-6], [9, 3.3e-6]], figures_dir=d),
+        "input": tools.input_network(0.05, 1e-6, [{"r": 0.002, "c": 20e-6}], 10.8, 13.2, 16.7, 1e5, 6, 19,
+                                     figures_dir=d),
+    }
+    csv = tmp_path / "iin.csv"
+    t = np.linspace(0, 10 / 4e5, 2000, endpoint=False)
+    np.savetxt(csv, np.column_stack([t, 2 + np.sign(np.sin(2 * np.pi * 4e5 * t))]), delimiter=",",
+               header="time,iin", comments="")
+    runs["emi"] = tools.conducted_emissions(str(csv), "time", "iin", [[150e3, 66], [5e5, 56], [3e7, 60]],
+                                            "CISPR 32 class B (test)", figures_dir=d)
+    if FIXTURE.exists():
+        b = layout.load(FIXTURE)
+        pads = [(p.ref, p.number) for f in b.footprints.values() for p in f.pads.values() if p.net == "VCC"]
+        runs["connectivity"] = tools.copper_connectivity(str(FIXTURE), "VCC", pitch_mm=0.3, figures_dir=d)
+        runs["path"] = tools.copper_path(str(FIXTURE), "VCC", [pads[0]], [pads[-1]], current_a=0.5, pitch_mm=0.3,
+                                         figures_dir=d)
+        runs["coupling"] = tools.trace_coupling(str(FIXTURE), "VCC", "GND", figures_dir=d)
+    for name, out in runs.items():
+        if name == "path" and not out["connected"]:
+            continue
+        assert out["figures"] and all(_png(f) for f in out["figures"]), name
+        for c in out.get("checks", []) + ([out["check"]] if "check" in out else []):
+            assert c["figures"] == out["figures"], name               # each check carries its graph
+    # the report embeds the checks' graphs and the summary chart, and names what has no graph
+    plain = tools.evaluate_check("ripple", "<= 50 mV", 0.02, 0.05, "max", "closed form", {"x": 1})
+    rep = tools.write_report("t", "d", runs["inductor"]["checks"] + [plain], str(tmp_path / "reports"), "r",
+                             documents=["md"])
+    titles = [f["title"] for f in rep["figures"]]
+    assert titles[0] == "Checks against their limits" and "L: inductance vs current" in titles
+    assert rep["ungraphed"] == ["ripple"]
+    assert (tmp_path / "sim/figures/r/r_checks_vs_limits.png").is_file()   # beside the reports folder
+    md = Path(rep["md"]).read_text(encoding="utf-8")
+    assert "Checks without a graph of their own: ripple." in md
+    # the inductor's checks share one graph: drawn under the first, referred to by number after
+    assert md.count("inductor_L.png)") == 1
+    assert "Graph: Figure 2, shown under test 1." in md

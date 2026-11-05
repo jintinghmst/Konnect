@@ -44,10 +44,10 @@ radiated emissions, crosstalk, filter attenuation or a pre-compliance plan
 
 ### 1. Pin down the requirement
 
-If the project has an accepted specification (`design/01_specification.json`,
+If the project has an accepted specification (`design/records/01_specification.json`,
 from the `kicad-design-flow` skill), it is the list: one check per requirement,
 named `R-xx <category>`, with the limit cited as
-`design/01_specification.json R-xx rev N (accepted)`. The user accepted it, so it
+`design/records/01_specification.json R-xx rev N (accepted)`. The user accepted it, so it
 is a sourced limit.
 
 Otherwise list each requirement as a measurable limit with its source: user,
@@ -100,10 +100,11 @@ folder):
 |---|---|
 | `sim/scripts/` | the scripts, named after the question (`buck_ripple.py`), so the user can re-run them |
 | `sim/inputs/` | sourced inputs: fabricator stackup JSON, spec, values read from datasheets |
-| `sim/results/<run>/` | raw outputs of one run: check JSON, waveforms (CSV/NPZ), logs |
+| `sim/results/<run>/` | raw outputs of one run: check JSON, waveforms (CSV/NPZ), logs; a report's checks as JSON |
 | `sim/figures/<run>/` | that run's charts (PNG) |
 | `sim/results/cycle_log.json` | the optimisation cycle's history |
-| `reports/` | the reports people read: `.md`, `.json` and `.pdf` |
+| `sim/report_sources/` | Markdown sources of written reports |
+| `reports/` | the reports people read: **PDF only** (Word only when the user asks) |
 
 `<run>` names one evaluation (`baseline`, `it1`, `it2`, ...). A script takes
 the run name as an argument and starts with
@@ -130,16 +131,28 @@ the run name as an argument and starts with
 ### 6. Report
 
 Use the package's report builder. Each check carries requirement, result,
-status, method, sources, assumptions, and what would complete it. Write the
-report to `reports/` (`reports/<name>_report.md`, `.json` and `.pdf`):
-`Report.write` and `sim_write_report` render the PDF, text and figures
-together, by default. Add `"docx"` to `documents` when the user wants Word.
+status, method, sources, assumptions, what would complete it, and its graphs.
+`Report.write` and `sim_write_report` write one file people read,
+`reports/<name>.pdf`, laid out as:
+
+1. **Summary:** the overall verdict and counts, a table of every check, the
+   chart of all checks against their limits, and general notes and assumptions.
+2. **Results by test:** one numbered section per check with requirement,
+   result, method, sources, assumptions, what would complete it and the lever,
+   followed by its graphs. A graph shared by several checks is drawn under the
+   first and referred to by figure number after that.
+3. **Further figures:** charts not tied to one check.
+
+Nothing else goes into `reports/`. The checks as JSON (read by
+`sim_cycle_record`) go to `sim/results/<run>/` (`data_dir`; default
+`sim/results/<name>/`). Add `"docx"` to `documents` only when the user asks for
+Word, and `"md"` only to debug the layout.
 
 A narrative engineering report (design choices, deliverables, results summary,
-recommendations) is also written in Markdown to `reports/`, with its figures
-linked from `sim/figures/<run>/` by relative path, and rendered with
-`sim_render_document` (or `document.render`). The PDF is the deliverable; the
-Markdown is its source.
+recommendations) is written in Markdown to `sim/report_sources/`, with its
+figures linked from `sim/figures/<run>/` by relative path, and rendered into
+`reports/` with `sim_render_document(markdown, out_dir=<project>/reports)`. The
+PDF is the deliverable; the Markdown stays with the simulation files.
 
 Status rules:
 
@@ -151,25 +164,47 @@ Status rules:
 The overall verdict is FAIL if any check fails, otherwise INCOMPLETE if any
 check is incomplete, otherwise PASS.
 
-**Graph every checked quantity.** A report is not finished until each swept or
-waveform result is also drawn against its limit and embedded in the report:
+**Every simulation is graphed.** No result is reported without its graph:
 
-- Build charts with the package's `figures` module (`metric_vs_x`,
-  `waveform_grid`, `spectrum`, `bode`). For a switching converter, save
-  `converter.snapshot(w, period)` at every operating point of the steady-state
-  sweep (the whole window the check measured) and call
-  `figures.ripple_figures(..., period=period)`: one summary of output, input
-  and inductor ripple versus load per input voltage, plus waveform grids of
-  output ripple, input ripple, inductor current and switch node. Every
-  peak-to-peak value in the figures is then the one the check reported.
-- Draw every spec limit as a labelled reference line. Mark a point the model
-  cannot represent (pulse skipping, a missing model) as such; never draw it as
-  a zero.
-- Save charts to `sim/figures/<run>/` and embed them:
-  `Report(figures=[(title, path)])` in a script, or
-  `sim_write_report(..., figures=[{"title", "path"}])` from the toolset (the
-  `png` of `sim_board_thermal` included). Then open the PNGs and check them for
-  overlapping labels, and check the rendered PDF pages, before reporting.
+- Every `sim_*` tool that simulates draws its result and returns it as
+  `figures` [{"title", "path"}], attached to each check it returns:
+
+  | Tool | Graph |
+  |---|---|
+  | `sim_spice_run` | The `plot` vectors (default: the measured ones) against time or frequency, with measured values marked |
+  | `sim_corner_sweep` | Each metric at every case, with the nominal and the worst cases marked |
+  | `sim_capacitor_check` | DC-bias curve with the working and maximum voltage and the rating |
+  | `sim_inductor_check` | L(I) curve with the DC, worst-peak and saturation currents |
+  | `sim_input_network` | Network output impedance against the converter's input resistance |
+  | `sim_conducted_emissions` | Spectrum against the limit line |
+  | `sim_copper_path` | Current-density map |
+  | `sim_copper_connectivity` | Map of the joined copper groups |
+  | `sim_trace_coupling` | Coupled runs |
+  | `sim_board_thermal` | Temperature map |
+
+  Parts without a manufacturer curve fall back to their checks against their limits.
+- Pass `figures_dir` = `sim/figures/<run>/` of the project to every tool, so the graphs
+  stay with the run. Without it they go to the system temporary folder.
+- `sim_write_report` and `Report.write` embed the checks' graphs. Every report also opens
+  its figures with a chart of all numeric checks as margins to their limits, coloured by
+  status. Checks with no graph of their own are listed under "Checks without a graph of
+  their own" and returned as `ungraphed`. Give each of them a graph (a script chart
+  passed in `figures`, or the tool that produced the number) before the report is
+  final. Only checks that are not a simulation (a datasheet lookup) may stay there.
+- In a script, attach a chart to its check (`Check(..., figures=[{"title", "path"}])`)
+  and build it with the package's `figures` module:
+  - general charts: `metric_vs_x`, `waveform_grid`, `spectrum`, `bode`, `curves`,
+    `cases`, `bars`, `board_map`;
+  - for a switching converter, save `converter.snapshot(w, period)` at every operating
+    point of the steady-state sweep (the whole window the check measured) and call
+    `figures.ripple_figures(..., period=period)`. This gives one summary of output, input
+    and inductor ripple versus load per input voltage, plus waveform grids of output
+    ripple, input ripple, inductor current and switch node. Every peak-to-peak value in
+    the figures is then the one the check reported.
+- Draw every spec limit as a labelled reference line. Mark a point the model cannot
+  represent (pulse skipping, a missing model) as such; never draw it as a zero.
+- Open the PNGs and check them for overlapping labels, and check the rendered PDF pages,
+  before reporting.
 
 ---
 
@@ -207,3 +242,5 @@ reuses this skill's scripts and report rules.
 4. Keep scripts, inputs, results, figures and reports in the project's
    standard folders so results can be reproduced.
 5. Validate every SPICE result against an independent estimate.
+6. Never report a simulation result without its graph; pass `figures_dir` to every
+   `sim_*` tool.

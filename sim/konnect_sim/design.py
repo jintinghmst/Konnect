@@ -8,11 +8,11 @@ A PCB design runs through stages, and the user decides at the end of each one (t
     2. part selection  the chosen parts, why, and which requirements they serve -> user accepts
     3. schematic, layout, verification (the other skills)
 
-Each record is kept in ``<project>/design/`` as JSON (the source of truth) and rendered as
-Markdown, PDF and Word for people to read:
+Each record is rendered as a PDF for people to read (Word on request); its JSON, the source
+of truth the tools read, is kept apart in ``records/``:
 
-    design/01_specification.json / .md / .pdf / .docx
-    design/02_part_selection.json / .md / .pdf / .docx
+    design/01_specification.pdf      design/records/01_specification.json
+    design/02_part_selection.pdf     design/records/02_part_selection.json
 
 Rules the functions enforce, so the gates hold whatever the assistant does:
 
@@ -74,12 +74,15 @@ def _check_origin(r: Requirement) -> None:
 
 
 def _path(project: str | Path, kind: str, suffix: str = ".json") -> Path:
-    return Folders(Path(project)).design / f"{STEMS[kind]}{suffix}"
+    folder = Folders(Path(project)).design
+    return (folder / "records" if suffix == ".json" else folder) / f"{STEMS[kind]}{suffix}"
 
 
 def load(project: str | Path, kind: str) -> dict | None:
-    p = _path(project, kind)
-    return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    for p in (_path(project, kind), Folders(Path(project)).design / f"{STEMS[kind]}.json"):   # then the old place
+        if p.is_file():
+            return json.loads(p.read_text(encoding="utf-8"))
+    return None
 
 
 def _cell(text) -> str:
@@ -167,14 +170,19 @@ def parts_markdown(rec: dict, spec: dict) -> str:
 
 
 def _render(project: str | Path, kind: str, rec: dict, documents) -> dict:
-    md = _path(project, kind, ".md")
-    md.parent.mkdir(parents=True, exist_ok=True)
-    _path(project, kind).write_text(json.dumps(rec, indent=2), encoding="utf-8")
+    js, md = _path(project, kind), _path(project, kind, ".md")
+    js.parent.mkdir(parents=True, exist_ok=True)
+    js.write_text(json.dumps(rec, indent=2), encoding="utf-8")
+    old = Folders(Path(project)).design / js.name                      # retire a record from the old place
+    if old.is_file():
+        old.unlink()
     text = spec_markdown(rec) if kind == SPEC else parts_markdown(rec, load(project, SPEC))
     md.write_text(text, encoding="utf-8")
-    out = {"json": str(_path(project, kind)), "markdown": str(md)}
-    if documents:
-        out |= document.render(md, documents)
+    out = {"json": str(js)} | document.render(md, [d for d in documents if d != "md"])
+    if "md" in documents:
+        out["markdown"] = str(md)
+    else:
+        md.unlink()
     return out
 
 
@@ -199,7 +207,7 @@ PARTS_KEYS = ("title", "parts", "notes", "spec_revision")
 
 
 def write_spec(project: str | Path, title: str, requirements: list[Requirement], brief: str = "",
-               notes: list[str] | None = None, change: str = "", documents=("pdf", "docx")) -> dict:
+               notes: list[str] | None = None, change: str = "", documents=("pdf",)) -> dict:
     ids = [r.id for r in requirements]
     if not requirements:
         raise ValueError("a specification needs at least one requirement")
@@ -226,11 +234,11 @@ def write_spec(project: str | Path, title: str, requirements: list[Requirement],
 
 
 def write_parts(project: str | Path, title: str, parts: list[PartChoice], notes: list[str] | None = None,
-                change: str = "", documents=("pdf", "docx")) -> dict:
+                change: str = "", documents=("pdf",)) -> dict:
     spec = load(project, SPEC)
     if not spec or spec["status"] != ACCEPTED:
         raise ValueError("the specification must be accepted by the user before parts are selected "
-                         "(design/01_specification.json)")
+                         "(design/records/01_specification.json)")
     if not parts:
         raise ValueError("a part selection needs at least one part")
     known = {r["id"] for r in spec["requirements"]}
@@ -249,7 +257,7 @@ def write_parts(project: str | Path, title: str, parts: list[PartChoice], notes:
     return out | {"revision": rec["revision"], "status": rec["status"], "requirements_not_cited": uncovered}
 
 
-def approve(project: str | Path, kind: str, approved_by: str, statement: str, documents=("pdf", "docx")) -> dict:
+def approve(project: str | Path, kind: str, approved_by: str, statement: str, documents=("pdf",)) -> dict:
     """Record the user's acceptance of the current revision of a record."""
     if kind not in STEMS:
         raise ValueError(f"record must be one of {list(STEMS)}")

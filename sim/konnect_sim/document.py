@@ -477,12 +477,16 @@ def to_docx(md_path: str | Path, docx_path: str | Path | None = None) -> Path:
     return docx_path
 
 
-def render(md_path: str | Path, formats=("pdf",)) -> dict[str, str]:
-    """Write ``<md stem>.pdf`` / ``.docx`` next to the Markdown file; returns {format: path}."""
+def render(md_path: str | Path, formats=("pdf",), out_dir: str | Path | None = None) -> dict[str, str]:
+    """Write ``<md stem>.pdf`` / ``.docx`` into ``out_dir`` (default: next to the Markdown file;
+    images stay relative to the Markdown); returns {format: path}."""
     bad = [f for f in formats if f not in FORMATS]
     if bad:
         raise ValueError(f"unknown document format(s) {bad}; use {list(FORMATS)}")
+    md_path = Path(md_path)
+    folder = Path(out_dir) if out_dir else md_path.parent
+    folder.mkdir(parents=True, exist_ok=True)
     out = {}
     for f in formats:
-        out[f] = str((to_pdf if f == "pdf" else to_docx)(md_path))
+        out[f] = str((to_pdf if f == "pdf" else to_docx)(md_path, folder / f"{md_path.stem}.{f}"))
     return out

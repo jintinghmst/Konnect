@@ -770,6 +770,8 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         "requirements_not_cited",
         "part_selection",
         "key_values",
+        "board_map",
+        "report_sources",
         // kicad-sim-optimize: functions of the simulation package's layout module.
         "layer_gap_mm",
         "loop_inductance",

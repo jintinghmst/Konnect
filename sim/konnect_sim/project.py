@@ -6,8 +6,10 @@
       sim/results/<run>/    raw outputs of one run: check JSON, waveforms (CSV/NPZ), logs
       sim/figures/<run>/    the charts of that run (PNG)
       sim/results/cycle_log.json   the optimisation cycle's history, across runs
-      reports/              the reports people read: <stem>.md / .json / .pdf (+ .docx)
-      design/               the user-approved design records: specification, part selection
+      sim/report_sources/   Markdown sources of written reports (rendered into reports/)
+      reports/              the reports people read: <stem>.pdf only
+      design/               the user-approved design records: specification, part selection (PDF;
+                            their JSON in design/records/)
 
 A script finds its project from its own location:
 
@@ -54,6 +56,10 @@ class Folders:
     @property
     def cycle_log(self) -> Path:
         return self.sim / "results" / "cycle_log.json"
+
+    @property
+    def report_sources(self) -> Path:
+        return self.sim / "report_sources"
 
     @property
     def reports(self) -> Path:

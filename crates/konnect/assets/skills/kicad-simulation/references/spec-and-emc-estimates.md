@@ -49,7 +49,7 @@ the values below are placeholders.
 
 ```spice
 * PDN impedance at the IC: |V(ic)| in volts = |Z| in ohms
-I1 0 ic AC 1
+I1 0 ic DC 0 AC 1
 * 4 x 100 nF decoupling in parallel (C, ESR, ESL + mounting from sources)
 Cd ic d1 400n
 Rd d1 d2 2.5m

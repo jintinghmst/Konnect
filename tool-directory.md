@@ -88,8 +88,8 @@ and Windows servers do not.
 
 | Tool | Description |
 |------|-------------|
-| `sim_write_spec` | Write the design specification (stage 1) as a draft for the user to accept: design/01_specification.json, .md, .pdf and .docx in the KiCad project folder. |
-| `sim_write_part_selection` | Write the part selection (stage 2) as a draft for the user to accept: design/02_part_selection.*. Refused until the specification is accepted. |
+| `sim_write_spec` | Write the design specification (stage 1) as a draft for the user to accept: design/01_specification.pdf in the KiCad project folder (the record itself in design/records/). |
+| `sim_write_part_selection` | Write the part selection (stage 2) as a draft for the user to accept: design/02_part_selection.pdf. Refused until the specification is accepted. |
 | `sim_approve_record` | Record the user's acceptance of the current revision of the specification or part selection. |
 | `sim_design_status` | Where the staged design stands (specification and part selection: revision, draft or accepted) and the next step it allows. |
 
@@ -511,8 +511,8 @@ the router or relying on the KiCad ActionPlugin workflow.
 | `sim_conducted_emissions` | Differential-mode conducted spectrum at a LISN port from any simulated input-current waveform (CSV of whole periods) and its worst margin to a limit line [[f_hz, dBuV], ...] cited in `limit_source`. |
 | `sim_corner_sweep` | Worst case of each metric over tolerance spreads. |
 | `sim_evaluate_check` | Apply the evidence rule to any comparison: `inputs` {name: number or {value, source}}; PASS/FAIL only when every input is sourced. |
-| `sim_write_report` | Write a Markdown + JSON report from check dicts (as returned by the other tools), and a PDF of it with its figures; the overall verdict follows the report rules. |
-| `sim_render_document` | Render a Markdown report (an engineering write-up, or any report from write_report) as PDF and/or Word next to it, text and images together. |
+| `sim_write_report` | Write the report of check dicts (as returned by the other tools) as one PDF: overall verdict, check table and the chart of checks against their limits first, then one section per check with its method, sources, assumptions and graphs. |
+| `sim_render_document` | Render a Markdown write-up (e.g. the engineering report, kept in `sim/report_sources/`) as a PDF in `reports/`, text and images together. |
 | `sim_cycle_record` | Record one simulate -> change iteration (a report written by write_report or an evaluation script) and return the cycle's decision: continue / revert / met / stalled / limit. |
 | `sim_layout_calc` | Closed-form layout physics, with the formula named in the answer. |
 

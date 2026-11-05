@@ -60,8 +60,8 @@ The project script runs one full evaluation and records it in the cycle log.
 - It reads the schematic through the package's netlist loader and the saved board
   through its layout loader, extracts the layout parasitics, runs the closed-form
   and SPICE checks, writes raw outputs to `sim/results/<run>/` and charts to
-  `sim/figures/<run>/`, and writes `reports/<stem>_<run>.md` / `.json` / `.pdf`
-  with the charts embedded.
+  `sim/figures/<run>/`, and writes `reports/<stem>_<run>.pdf` with the charts
+  embedded (its checks as JSON in `sim/results/<run>/`, passed to the cycle log).
 - Every constraint carries value, limit, sense, whether it depends on the layout,
   and its lever.
 - It appends the iteration to `sim/results/cycle_log.json` through the package's
@@ -145,8 +145,9 @@ act on the decision:
 
 ## Final report
 
-Write it in Markdown to `reports/`, embed the final run's charts from
-`sim/figures/<run>/`, and render the PDF with `sim_render_document`. It holds:
+Write it in Markdown to `sim/report_sources/`, embed the final run's charts from
+`sim/figures/<run>/`, and render the PDF into `reports/` with `sim_render_document`
+(`out_dir`). It holds:
 
 - The iteration table from the cycle log (change, misses, worst margin,
   objectives, DRC, verdict) and the final decision.

@@ -15,7 +15,7 @@
 | spice | configure ngspice; run a plain-SPICE netlist and get vectors back |
 | netlist | load a schematic's components, values and nets via kicad-cli |
 | units | parse KiCad value text such as "22uF 16V" or "470pF DNP" |
-| report | checks with status, method, sources and assumptions; Markdown and JSON output |
+| report | checks with status, method, sources, assumptions and graphs; one PDF (summary first, then each test with its figures), the checks as JSON in `sim/results/` |
 | buck | buck design equations, a switched open-loop SPICE testbench (optionally with layout parasitics and an edge-resolved run), and extraction of a buck layout's parasitics |
 | layout | read a saved board (read-only): pads, tracks, vias, pours and their fills, stackup; copper path resistance, loop and via inductance, IPC-2221 track width |
 | cycle | iteration log and continue / revert / met / stalled / limit decisions for the optimisation cycle |
@@ -33,7 +33,7 @@
 | budget | output-voltage window at the load: both limits, every contribution |
 | figures | report charts: ripple summary and waveform grids from `converter.snapshot`, metric vs sweep, spectrum vs limit, Bode; embedded through `Report(figures=...)` |
 | document | the report as PDF (default) or Word, text and figures together: `Report.write(..., documents=...)`, `sim_write_report`, `sim_render_document` |
-| project | `Folders`: `sim/scripts`, `sim/inputs`, `sim/results/<run>`, `sim/figures/<run>`, `reports/` |
+| project | `Folders`: `sim/scripts`, `sim/inputs`, `sim/results/<run>`, `sim/figures/<run>`, `sim/report_sources`, `reports/` (PDF only) |
 
 ## Coverage of a buck verification
 

@@ -40,8 +40,9 @@ fabricator stackup JSON with its source. Reports which, or that none exists."#,
         tool!(
             "sim_copper_connectivity",
             r#"Which pads of ``net`` share copper (pours with their thermal reliefs,
-tracks, pads, vias). ``pads`` defaults to every pad of the net."#,
-            json!({"type": "object", "properties": {"board": {"type": "string"}, "net": {"type": "string"}, "pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "pitch_mm": {"type": "number", "default": 0.1}, "stackup_json": {"type": "string"}}, "required": ["board", "net"]}),
+tracks, pads, vias). ``pads`` defaults to every pad of the net. Graph: the
+net's copper per layer, one colour per group of joined pads."#,
+            json!({"type": "object", "properties": {"board": {"type": "string"}, "net": {"type": "string"}, "pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "pitch_mm": {"type": "number", "default": 0.1}, "stackup_json": {"type": "string"}, "figures_dir": {"type": "string"}}, "required": ["board", "net"]}),
             |args, ctx| async move { handle_sim_copper_connectivity(args, ctx).await }
         ),
         tool!(
@@ -50,16 +51,17 @@ tracks, pads, vias). ``pads`` defaults to every pad of the net."#,
 ``current_a``, peak current density (1 mm averaged; raw and pad-entry
 peaks too), current in every via barrel, and with ``rms_a`` + ``rise_c``
 the IPC-2221 copper and via capacity verdict. ``plane_gap_mm`` adds a
-low-frequency partial-inductance estimate."#,
-            json!({"type": "object", "properties": {"board": {"type": "string"}, "net": {"type": "string"}, "source_pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "sink_pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "current_a": {"type": "number", "default": 1.0}, "rms_a": {"type": "number"}, "rise_c": {"type": "number"}, "plane_gap_mm": {"type": "number"}, "pitch_mm": {"type": "number", "default": 0.1}, "stackup_json": {"type": "string"}}, "required": ["board", "net", "source_pads", "sink_pads"]}),
+low-frequency partial-inductance estimate. Graph: current density per layer."#,
+            json!({"type": "object", "properties": {"board": {"type": "string"}, "net": {"type": "string"}, "source_pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "sink_pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "current_a": {"type": "number", "default": 1.0}, "rms_a": {"type": "number"}, "rise_c": {"type": "number"}, "plane_gap_mm": {"type": "number"}, "pitch_mm": {"type": "number", "default": 0.1}, "stackup_json": {"type": "string"}, "figures_dir": {"type": "string"}}, "required": ["board", "net", "source_pads", "sink_pads"]}),
             |args, ctx| async move { handle_sim_copper_path(args, ctx).await }
         ),
         tool!(
             "sim_trace_coupling",
             r#"Mutual capacitance between parallel track runs of two nets (wires over a
 ground plane), and with an aggressor swing ``dv`` in ``t_edge`` into a
-victim of Thevenin resistance ``r_victim_ohm`` the coupled noise check."#,
-            json!({"type": "object", "properties": {"board": {"type": "string"}, "aggressor_net": {"type": "string"}, "victim_net": {"type": "string"}, "er_eff": {"type": "number"}, "max_sep_mm": {"type": "number", "default": 5.0}, "dv": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "t_edge": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "r_victim_ohm": {"type": "number"}, "c_victim": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "allowed_v": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "stackup_json": {"type": "string"}}, "required": ["board", "aggressor_net", "victim_net"]}),
+victim of Thevenin resistance ``r_victim_ohm`` the coupled noise check.
+Graph: mutual capacitance of every coupled run."#,
+            json!({"type": "object", "properties": {"board": {"type": "string"}, "aggressor_net": {"type": "string"}, "victim_net": {"type": "string"}, "er_eff": {"type": "number"}, "max_sep_mm": {"type": "number", "default": 5.0}, "dv": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "t_edge": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "r_victim_ohm": {"type": "number"}, "c_victim": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "allowed_v": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "stackup_json": {"type": "string"}, "figures_dir": {"type": "string"}}, "required": ["board", "aggressor_net", "victim_net"]}),
             |args, ctx| async move { handle_sim_trace_coupling(args, ctx).await }
         ),
         tool!(
@@ -67,8 +69,9 @@ victim of Thevenin resistance ``r_victim_ohm`` the coupled noise check."#,
             r#"Steady-state board temperature from footprint losses ({ref: W}) and
 optional copper I^2R flows ([{net, source_pads, sink_pads, rms_a}]).
 ``package_resistance`` {ref: K/W or {value, source}} adds component
-temperatures above their board spot; ``png`` saves a map of F.Cu."#,
-            json!({"type": "object", "properties": {"board": {"type": "string"}, "ambient_c": {"type": "number"}, "h_w_m2k": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "k_inplane": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "k_through": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "footprint_watts": {"type": "object", "additionalProperties": {"type": "number"}, "description": "{reference: watts}"}, "package_resistance": {"type": "object", "additionalProperties": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}, "name": {"type": "string"}}, "required": ["value"]}]}, "description": "{reference: K/W to board}"}, "limits_c": {"type": "object", "additionalProperties": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}, "name": {"type": "string"}}, "required": ["value"]}]}, "description": "{reference: max °C}"}, "board_limit_c": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "copper_flows": {"type": "array", "items": {"type": "object", "properties": {"net": {"type": "string"}, "source_pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "sink_pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "rms_a": {"type": "number"}}, "required": ["net", "source_pads", "sink_pads", "rms_a"]}}, "pitch_mm": {"type": "number", "default": 0.5}, "png": {"type": "string"}, "stackup_json": {"type": "string"}}, "required": ["board", "ambient_c", "h_w_m2k", "k_inplane", "k_through", "footprint_watts"]}),
+temperatures above their board spot. Graph: the temperature map of F.Cu,
+saved to ``png`` when given."#,
+            json!({"type": "object", "properties": {"board": {"type": "string"}, "ambient_c": {"type": "number"}, "h_w_m2k": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "k_inplane": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "k_through": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "footprint_watts": {"type": "object", "additionalProperties": {"type": "number"}, "description": "{reference: watts}"}, "package_resistance": {"type": "object", "additionalProperties": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}, "name": {"type": "string"}}, "required": ["value"]}]}, "description": "{reference: K/W to board}"}, "limits_c": {"type": "object", "additionalProperties": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}, "name": {"type": "string"}}, "required": ["value"]}]}, "description": "{reference: max °C}"}, "board_limit_c": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "copper_flows": {"type": "array", "items": {"type": "object", "properties": {"net": {"type": "string"}, "source_pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "sink_pads": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "minItems": 1}, "rms_a": {"type": "number"}}, "required": ["net", "source_pads", "sink_pads", "rms_a"]}}, "pitch_mm": {"type": "number", "default": 0.5}, "png": {"type": "string"}, "stackup_json": {"type": "string"}, "figures_dir": {"type": "string"}}, "required": ["board", "ambient_c", "h_w_m2k", "k_inplane", "k_through", "footprint_watts"]}),
             |args, ctx| async move { handle_sim_board_thermal(args, ctx).await }
         ),
         tool!(
@@ -76,46 +79,54 @@ temperatures above their board spot; ``png`` saves a map of F.Cu."#,
             r#"Run a complete SPICE netlist in KiCad's ngspice and summarise vectors.
 ``measures``: [{vector, kind: max|min|avg|pp|rms|final|at, t_from?, t_to?, at?}]
 (``t`` means the sweep variable: time, frequency or the DC source). AC
-vectors are reported as magnitude. ``csv`` saves every vector."#,
-            json!({"type": "object", "properties": {"netlist_text": {"type": "string"}, "measures": {"type": "array", "items": {"type": "object", "properties": {"vector": {"type": "string"}, "kind": {"enum": ["max", "min", "avg", "pp", "rms", "final", "at"]}, "t_from": {"type": "number"}, "t_to": {"type": "number"}, "at": {"type": "number"}}, "required": ["vector", "kind"]}}, "csv": {"type": "string"}}, "required": ["netlist_text"]}),
+vectors are reported as magnitude. ``csv`` saves every vector. Graph: the
+``plot`` vectors (default: the measured ones, else up to six) against the
+sweep, one panel each, with the measured values marked."#,
+            json!({"type": "object", "properties": {"netlist_text": {"type": "string"}, "measures": {"type": "array", "items": {"type": "object", "properties": {"vector": {"type": "string"}, "kind": {"enum": ["max", "min", "avg", "pp", "rms", "final", "at"]}, "t_from": {"type": "number"}, "t_to": {"type": "number"}, "at": {"type": "number"}}, "required": ["vector", "kind"]}}, "csv": {"type": "string"}, "plot": {"type": "array", "items": {"type": "string"}, "description": "vectors to graph; default the measured ones"}, "figures_dir": {"type": "string"}}, "required": ["netlist_text"]}),
             |args, ctx| async move { handle_sim_spice_run(args, ctx).await }
         ),
         tool!(
             "sim_capacitor_check",
             r#"Voltage rating vs applied maximum and derating, effective capacitance
-(tolerance, DC bias, temperature), ripple current and self-heating."#,
-            json!({"type": "object", "properties": {"mpn": {"type": "string"}, "c_f": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "tol": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "v_rating": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "count": {"type": "integer"}, "role": {"type": "string"}, "v_max": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "v_dc": {"type": "number"}, "c_needed": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "derating": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "dc_bias": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}, "description": "[[V, C/C_nom], ...] manufacturer curve"}, "dc_bias_source": {"type": "string", "default": ""}, "temp_coef": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "esr_ohm": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "ripple_rating_a": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "ripple_rise_k": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "irms_part_a": {"type": "number", "default": 0.0}, "loss_part_w": {"type": "number", "default": 0.0}, "max_rise_k": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}}, "required": ["mpn", "c_f", "tol", "v_rating", "count", "role", "v_max", "v_dc"]}),
+(tolerance, DC bias, temperature), ripple current and self-heating.
+Graph: the DC-bias curve with the working and maximum voltages and the
+rating; without a curve, the checks against their limits."#,
+            json!({"type": "object", "properties": {"mpn": {"type": "string"}, "c_f": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "tol": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "v_rating": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "count": {"type": "integer"}, "role": {"type": "string"}, "v_max": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "v_dc": {"type": "number"}, "c_needed": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "derating": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "dc_bias": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}, "description": "[[V, C/C_nom], ...] manufacturer curve"}, "dc_bias_source": {"type": "string", "default": ""}, "temp_coef": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "esr_ohm": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "ripple_rating_a": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "ripple_rise_k": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "irms_part_a": {"type": "number", "default": 0.0}, "loss_part_w": {"type": "number", "default": 0.0}, "max_rise_k": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "figures_dir": {"type": "string"}}, "required": ["mpn", "c_f", "tol", "v_rating", "count", "role", "v_max", "v_dc"]}),
             |args, ctx| async move { handle_sim_capacitor_check(args, ctx).await }
         ),
         tool!(
             "sim_inductor_check",
             r#"Saturation margin, L at peak current, RMS current, copper and core loss,
-temperature rise scaled from the rating."#,
-            json!({"type": "object", "properties": {"mpn": {"type": "string"}, "l_h": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "tol": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "dcr_typ_ohm": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "dcr_max_ohm": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "i_dc_a": {"type": "number"}, "di_pp_a": {"type": "number"}, "i_peak_worst_a": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "fsw_hz": {"type": "number"}, "ambient_c": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "isat_a": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "isat_definition": {"type": "string", "default": ""}, "irms_a": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "irms_rise_k": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "l_vs_i": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}, "description": "[[A, H], ...] manufacturer curve"}, "l_vs_i_source": {"type": "string", "default": ""}, "core_loss_table": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}, "description": "[[f_hz, dI_pp_A, W], ...]"}, "core_loss_source": {"type": "string", "default": ""}, "max_temp_c": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "l_min_needed_h": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "dcr_ref_c": {"type": "number", "default": 25.0}}, "required": ["mpn", "l_h", "tol", "dcr_typ_ohm", "dcr_max_ohm", "i_dc_a", "di_pp_a", "i_peak_worst_a", "fsw_hz", "ambient_c"]}),
+temperature rise scaled from the rating. Graph: the L(I) curve with the DC,
+worst peak and saturation currents; without a curve, the checks."#,
+            json!({"type": "object", "properties": {"mpn": {"type": "string"}, "l_h": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "tol": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "dcr_typ_ohm": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "dcr_max_ohm": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "i_dc_a": {"type": "number"}, "di_pp_a": {"type": "number"}, "i_peak_worst_a": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "fsw_hz": {"type": "number"}, "ambient_c": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "isat_a": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "isat_definition": {"type": "string", "default": ""}, "irms_a": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "irms_rise_k": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "l_vs_i": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}, "description": "[[A, H], ...] manufacturer curve"}, "l_vs_i_source": {"type": "string", "default": ""}, "core_loss_table": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}, "description": "[[f_hz, dI_pp_A, W], ...]"}, "core_loss_source": {"type": "string", "default": ""}, "max_temp_c": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "l_min_needed_h": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "dcr_ref_c": {"type": "number", "default": 25.0}, "figures_dir": {"type": "string"}}, "required": ["mpn", "l_h", "tol", "dcr_typ_ohm", "dcr_max_ohm", "i_dc_a", "di_pp_a", "i_peak_worst_a", "fsw_hz", "ambient_c"]}),
             |args, ctx| async move { handle_sim_inductor_check(args, ctx).await }
         ),
         tool!(
             "sim_input_network",
             r#"Source/cable/filter output impedance against a constant-power load's
 negative input resistance (Middlebrook, up to ``f_max_hz``), and the
-hot-plug overshoot into the input capacitors. ``branches``: [{r, l, c}]."#,
-            json!({"type": "object", "properties": {"series_r_ohm": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "series_l_h": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "branches": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {"r": {"type": "number"}, "l": {"type": "number"}, "c": {"type": "number"}}, "required": ["r"]}}, "vin_min": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "vin_max": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "p_in_max": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "f_max_hz": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "margin_min_db": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "vin_abs_max": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}}, "required": ["series_r_ohm", "series_l_h", "branches", "vin_min", "vin_max", "p_in_max", "f_max_hz", "margin_min_db", "vin_abs_max"]}),
+hot-plug overshoot into the input capacitors. ``branches``: [{r, l, c}].
+Graph: |Z_out| over frequency against |R_in| and the required margin."#,
+            json!({"type": "object", "properties": {"series_r_ohm": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "series_l_h": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "branches": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {"r": {"type": "number"}, "l": {"type": "number"}, "c": {"type": "number"}}, "required": ["r"]}}, "vin_min": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "vin_max": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "p_in_max": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "f_max_hz": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "margin_min_db": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "vin_abs_max": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}}, "required": ["value"], "description": "a sourced value; a bare number is an assumption"}]}, "figures_dir": {"type": "string"}}, "required": ["series_r_ohm", "series_l_h", "branches", "vin_min", "vin_max", "p_in_max", "f_max_hz", "margin_min_db", "vin_abs_max"]}),
             |args, ctx| async move { handle_sim_input_network(args, ctx).await }
         ),
         tool!(
             "sim_conducted_emissions",
             r#"Differential-mode conducted spectrum at a LISN port from any simulated
 input-current waveform (CSV of whole periods) and its worst margin to a
-limit line [[f_hz, dBuV], ...] cited in ``limit_source``."#,
-            json!({"type": "object", "properties": {"csv": {"type": "string"}, "time_col": {"type": "string"}, "current_col": {"type": "string"}, "limit_points": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}, "description": "[[f_hz, dBuV], ...] from the standard"}, "limit_source": {"type": "string"}, "l_lisn_h": {"type": "number", "default": 5e-05}, "f_lo": {"type": "number", "default": 150000.0}, "f_hi": {"type": "number", "default": 30000000.0}}, "required": ["csv", "time_col", "current_col", "limit_points", "limit_source"]}),
+limit line [[f_hz, dBuV], ...] cited in ``limit_source``. Graph: the
+spectrum against the limit line."#,
+            json!({"type": "object", "properties": {"csv": {"type": "string"}, "time_col": {"type": "string"}, "current_col": {"type": "string"}, "limit_points": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}, "description": "[[f_hz, dBuV], ...] from the standard"}, "limit_source": {"type": "string"}, "l_lisn_h": {"type": "number", "default": 5e-05}, "f_lo": {"type": "number", "default": 150000.0}, "f_hi": {"type": "number", "default": 30000000.0}, "figures_dir": {"type": "string"}}, "required": ["csv", "time_col", "current_col", "limit_points", "limit_source"]}),
             |args, ctx| async move { handle_sim_conducted_emissions(args, ctx).await }
         ),
         tool!(
             "sim_corner_sweep",
-            r#"Worst case of each metric over tolerance spreads.
+            r#"Worst case of each metric over tolerance spreads. Graph: every metric's
+value at every case, with the nominal and the worst cases marked.
 ``spreads``: [{name, nom, lo, hi, source}] (or {name, nom, tol, source});
 ``metrics``: {name: arithmetic expression of the spread names}."#,
-            json!({"type": "object", "properties": {"spreads": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {"name": {"type": "string"}, "nom": {"type": "number"}, "lo": {"type": "number"}, "hi": {"type": "number"}, "tol": {"type": "number"}, "source": {"type": "string"}}, "required": ["name", "nom"]}}, "metrics": {"type": "object", "additionalProperties": {"type": "string"}, "description": "{metric: arithmetic expression of the spread names}"}, "mode": {"enum": ["vertices", "montecarlo"], "default": "vertices"}, "n": {"type": "integer", "default": 200}, "seed": {"type": "integer", "default": 1}}, "required": ["spreads", "metrics"]}),
+            json!({"type": "object", "properties": {"spreads": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {"name": {"type": "string"}, "nom": {"type": "number"}, "lo": {"type": "number"}, "hi": {"type": "number"}, "tol": {"type": "number"}, "source": {"type": "string"}}, "required": ["name", "nom"]}}, "metrics": {"type": "object", "additionalProperties": {"type": "string"}, "description": "{metric: arithmetic expression of the spread names}"}, "mode": {"enum": ["vertices", "montecarlo"], "default": "vertices"}, "n": {"type": "integer", "default": 200}, "seed": {"type": "integer", "default": 1}, "figures_dir": {"type": "string"}}, "required": ["spreads", "metrics"]}),
             |args, ctx| async move { handle_sim_corner_sweep(args, ctx).await }
         ),
         tool!(
@@ -127,21 +138,28 @@ limit line [[f_hz, dBuV], ...] cited in ``limit_source``."#,
         ),
         tool!(
             "sim_write_report",
-            r#"Write a Markdown + JSON report from check dicts (as returned by the
-other tools), and a PDF of it with its figures; the overall verdict follows
-the report rules. ``figures``: [{"title", "path"}] images (PNG) embedded
-after the checks, e.g. the ``png`` of sim_board_thermal or charts from
-konnect_sim.figures. ``documents``: ["pdf"] (default), add "docx" for Word."#,
-            json!({"type": "object", "properties": {"title": {"type": "string"}, "design": {"type": "string"}, "checks": {"type": "array", "items": {"type": "object", "additionalProperties": true, "description": "a check record returned by another sim_* tool"}}, "out_dir": {"type": "string"}, "stem": {"type": "string"}, "notes": {"type": "array", "items": {"type": "string"}}, "figures": {"type": "array", "items": {"type": "object", "additionalProperties": false, "properties": {"title": {"type": "string"}, "path": {"type": "string", "description": "PNG file to embed"}}, "required": ["title", "path"]}}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "rendered with the figures; default [\"pdf\"]"}}, "required": ["title", "design", "checks", "out_dir", "stem"]}),
+            r#"Write the report of check dicts (as returned by the other tools) as one
+PDF, ``<out_dir>/<stem>.pdf``: the overall verdict, a table of the checks and
+the chart of all checks against their limits first, then one section per
+check with its method, sources, assumptions and its own graphs (the
+``figures`` the sim_* tools attach), then ``figures``: [{"title", "path"}]
+further PNGs. The verdict follows the report rules; ``ungraphed`` lists
+checks with no graph of their own. The chart goes to ``figures_dir`` and the
+checks as JSON (for sim_cycle_record) to ``data_dir``: by default
+``<project>/sim/figures/<stem>`` and ``<project>/sim/results/<stem>`` for a
+report in ``<project>/reports``. ``documents``: ["pdf"] (default); add
+"docx" for Word or "md" to keep the Markdown source."#,
+            json!({"type": "object", "properties": {"title": {"type": "string"}, "design": {"type": "string"}, "checks": {"type": "array", "items": {"type": "object", "additionalProperties": true, "description": "a check record returned by another sim_* tool"}}, "out_dir": {"type": "string"}, "stem": {"type": "string"}, "notes": {"type": "array", "items": {"type": "string"}}, "figures": {"type": "array", "items": {"type": "object", "additionalProperties": false, "properties": {"title": {"type": "string"}, "path": {"type": "string", "description": "PNG file to embed"}}, "required": ["title", "path"]}}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "rendered with the figures; default [\"pdf\"]"}, "figures_dir": {"type": "string"}, "data_dir": {"type": "string"}}, "required": ["title", "design", "checks", "out_dir", "stem"]}),
             |args, ctx| async move { handle_sim_write_report(args, ctx).await }
         ),
         tool!(
             "sim_render_document",
-            r#"Render a Markdown report (an engineering write-up, or any report from
-write_report) as PDF and/or Word next to it, text and images together.
+            r#"Render a Markdown write-up (e.g. the engineering report, kept in
+``<project>/sim/report_sources/``) as a PDF in ``out_dir`` (the project's
+``reports``; default: next to the Markdown), text and images together.
 Image paths are relative to the Markdown file. ``formats``: ["pdf"]
 (default) and/or "docx"."#,
-            json!({"type": "object", "properties": {"markdown": {"type": "string"}, "formats": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\"]"}}, "required": ["markdown"]}),
+            json!({"type": "object", "properties": {"markdown": {"type": "string"}, "formats": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\"]"}, "out_dir": {"type": "string"}}, "required": ["markdown"]}),
             |args, ctx| async move { handle_sim_render_document(args, ctx).await }
         ),
         tool!(
@@ -172,8 +190,8 @@ pub fn design_tools() -> Vec<ToolDef> {
         tool!(
             "sim_write_spec",
             r#"Write the design specification (stage 1) as a draft for the user to
-accept: design/01_specification.json, .md, .pdf and .docx in the KiCad
-project folder. Each requirement: {id, category, parameter, condition (test
+accept: design/01_specification.pdf in the KiCad project folder (the record
+itself in design/records/; "docx" in ``documents`` adds Word). Each requirement: {id, category, parameter, condition (test
 condition), criterion (pass criterion), origin (user / assumed / "standard:
 <doc>" / "datasheet: <doc>"), rationale, verification}. Rewriting it with
 any change starts the next draft revision; only sim_approve_record accepts it."#,
@@ -183,7 +201,7 @@ any change starts the next draft revision; only sim_approve_record accepts it."#
         tool!(
             "sim_write_part_selection",
             r#"Write the part selection (stage 2) as a draft for the user to accept:
-design/02_part_selection.*. Refused until the specification is accepted.
+design/02_part_selection.pdf. Refused until the specification is accepted.
 Each part: {role, part (MPN), reasons [..], requirements [ids it serves],
 manufacturer, key_values, alternatives [..], datasheet, sourcing,
 references, risks}; every cited id must exist in the specification."#,
@@ -229,7 +247,14 @@ async fn handle_sim_copper_connectivity(
     run_sim(
         "sim_copper_connectivity",
         args,
-        &["board", "net", "pads", "pitch_mm", "stackup_json"],
+        &[
+            "board",
+            "net",
+            "pads",
+            "pitch_mm",
+            "stackup_json",
+            "figures_dir",
+        ],
     )
     .await
 }
@@ -252,6 +277,7 @@ async fn handle_sim_copper_path(
             "plane_gap_mm",
             "pitch_mm",
             "stackup_json",
+            "figures_dir",
         ],
     )
     .await
@@ -276,6 +302,7 @@ async fn handle_sim_trace_coupling(
             "c_victim",
             "allowed_v",
             "stackup_json",
+            "figures_dir",
         ],
     )
     .await
@@ -302,13 +329,19 @@ async fn handle_sim_board_thermal(
             "pitch_mm",
             "png",
             "stackup_json",
+            "figures_dir",
         ],
     )
     .await
 }
 
 async fn handle_sim_spice_run(args: &Value, _ctx: &ToolContext) -> anyhow::Result<CallToolResult> {
-    run_sim("sim_spice_run", args, &["netlist_text", "measures", "csv"]).await
+    run_sim(
+        "sim_spice_run",
+        args,
+        &["netlist_text", "measures", "csv", "plot", "figures_dir"],
+    )
+    .await
 }
 
 async fn handle_sim_capacitor_check(
@@ -338,6 +371,7 @@ async fn handle_sim_capacitor_check(
             "irms_part_a",
             "loss_part_w",
             "max_rise_k",
+            "figures_dir",
         ],
     )
     .await
@@ -372,6 +406,7 @@ async fn handle_sim_inductor_check(
             "max_temp_c",
             "l_min_needed_h",
             "dcr_ref_c",
+            "figures_dir",
         ],
     )
     .await
@@ -394,6 +429,7 @@ async fn handle_sim_input_network(
             "f_max_hz",
             "margin_min_db",
             "vin_abs_max",
+            "figures_dir",
         ],
     )
     .await
@@ -415,6 +451,7 @@ async fn handle_sim_conducted_emissions(
             "l_lisn_h",
             "f_lo",
             "f_hi",
+            "figures_dir",
         ],
     )
     .await
@@ -427,7 +464,7 @@ async fn handle_sim_corner_sweep(
     run_sim(
         "sim_corner_sweep",
         args,
-        &["spreads", "metrics", "mode", "n", "seed"],
+        &["spreads", "metrics", "mode", "n", "seed", "figures_dir"],
     )
     .await
 }
@@ -472,6 +509,8 @@ async fn handle_sim_write_report(
             "notes",
             "figures",
             "documents",
+            "figures_dir",
+            "data_dir",
         ],
     )
     .await
@@ -481,7 +520,12 @@ async fn handle_sim_render_document(
     args: &Value,
     _ctx: &ToolContext,
 ) -> anyhow::Result<CallToolResult> {
-    run_sim("sim_render_document", args, &["markdown", "formats"]).await
+    run_sim(
+        "sim_render_document",
+        args,
+        &["markdown", "formats", "out_dir"],
+    )
+    .await
 }
 
 async fn handle_sim_cycle_record(
