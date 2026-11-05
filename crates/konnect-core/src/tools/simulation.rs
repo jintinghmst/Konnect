@@ -146,8 +146,8 @@ check with its method, sources, assumptions and its own graphs (the
 further PNGs. The verdict follows the report rules; ``ungraphed`` lists
 checks with no graph of their own. The chart goes to ``figures_dir`` and the
 checks as JSON (for sim_cycle_record) to ``data_dir``: by default
-``<project>/sim/figures/<stem>`` and ``<project>/sim/results/<stem>`` for a
-report in ``<project>/reports``. ``documents``: ["pdf"] (default); add
+``iteration<N>/sim/figures`` and ``iteration<N>/sim/results`` for a report in
+``<project>/iteration<N>/reports`` (the usual place). ``documents``: ["pdf"] (default); add
 "docx" for Word or "md" to keep the Markdown source."#,
             json!({"type": "object", "properties": {"title": {"type": "string"}, "design": {"type": "string"}, "checks": {"type": "array", "items": {"type": "object", "additionalProperties": true, "description": "a check record returned by another sim_* tool"}}, "out_dir": {"type": "string"}, "stem": {"type": "string"}, "notes": {"type": "array", "items": {"type": "string"}}, "figures": {"type": "array", "items": {"type": "object", "additionalProperties": false, "properties": {"title": {"type": "string"}, "path": {"type": "string", "description": "PNG file to embed"}}, "required": ["title", "path"]}}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "rendered with the figures; default [\"pdf\"]"}, "figures_dir": {"type": "string"}, "data_dir": {"type": "string"}}, "required": ["title", "design", "checks", "out_dir", "stem"]}),
             |args, ctx| async move { handle_sim_write_report(args, ctx).await }

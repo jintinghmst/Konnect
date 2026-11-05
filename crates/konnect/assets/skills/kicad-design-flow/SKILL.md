@@ -24,7 +24,7 @@ in the KiCad project folder:
 |---|---|
 | `design/01_specification.pdf` | 1. Specification |
 | `design/02_part_selection.pdf` | 2. Part selection |
-| `reports/<name>.pdf`, `sim/` | 5. Verification (`kicad-simulation`) |
+| `sim/` (scripts), `iteration<N>/` (each pass: `sim/results`, `sim/figures`, `reports`), `reports/` (final) | 5. Verification (`kicad-simulation`) |
 
 The user reads the PDFs; Word is added (`documents=["pdf", "docx"]`) only when
 they ask. Each record's JSON, the source of truth the tools read, is kept apart in
@@ -138,7 +138,7 @@ continuing.
 |---|---|---|
 | 3. Schematic | `kicad-schematic` (parts exactly as accepted; any substitution goes back through stage 2) | ERC result and schematic PDF (`export_schematic_pdf`), plus schematic-level checks per `kicad-simulation` |
 | 4. Layout | `kicad-pcb`, then `kicad-sim-optimize` | DRC result, board renders, layout-dependent checks |
-| 5. Verification | `kicad-simulation` | Report in `reports/`: one check per requirement ID, named `R-xx <category>` |
+| 5. Verification | `kicad-simulation` | Report in `iteration<N>/reports/`: one check per requirement ID, named `R-xx <category>` |
 | 6. Manufacture | `kicad-manufacture` | Never order or upload without an explicit yes |
 
 ## Rules

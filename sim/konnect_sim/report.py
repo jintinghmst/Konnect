@@ -227,15 +227,15 @@ class Report:
 
     @staticmethod
     def default_figures_dir(folder: Path, stem: str) -> Path:
-        """``<project>/sim/figures/<stem>`` for a report in ``<project>/reports``, else
-        ``<folder>/<stem>_figures``."""
-        return folder.parent / "sim" / "figures" / stem if folder.name == "reports" else folder / f"{stem}_figures"
+        """See ``project.report_dirs``: ``iteration<N>/sim/figures`` for ``iteration<N>/reports``."""
+        from .project import report_dirs
+        return report_dirs(folder, stem)[0]
 
     @staticmethod
     def default_data_dir(folder: Path, stem: str) -> Path:
-        """``<project>/sim/results/<stem>`` for a report in ``<project>/reports``, else
-        ``<folder>/<stem>_data``."""
-        return folder.parent / "sim" / "results" / stem if folder.name == "reports" else folder / f"{stem}_data"
+        """See ``project.report_dirs``: ``iteration<N>/sim/results`` for ``iteration<N>/reports``."""
+        from .project import report_dirs
+        return report_dirs(folder, stem)[1]
 
     def to_json(self) -> dict:
         """The checks as data (figure paths absolute), for the optimisation cycle and scripts."""

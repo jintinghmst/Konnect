@@ -92,23 +92,36 @@ when the second is impossible, and the report says so.
 
 ### 4. Write the script
 
-Keep every project's simulation files in the same folders (the package's
-`project.Folders` gives these paths; never mix scripts, data and charts in one
-folder):
+Every project uses the same layout (the package's `project.Folders` gives these
+paths; never mix scripts, data and charts in one folder):
+
+```
+<project>/
+  *.kicad_pro / _sch / _pcb
+  design/                  approved specification and part selection (kicad-design-flow)
+  sim/                     the simulation scripts, shared by all iterations
+  sim/inputs/              sourced inputs: fabricator stackup JSON, datasheet values
+  sim/report_sources/      Markdown sources of written reports
+  sim/cycle_log.json       the optimisation cycle's history
+  reports/                 final reports: PDF only
+  iteration1/sim/results/  raw outputs of iteration 1: check JSON, waveforms (CSV/NPZ), logs
+  iteration1/sim/figures/  its charts (PNG)
+  iteration1/reports/      its report: PDF only
+  iteration2/ ...          the next pass, after a design or layout change
+```
 
 | Folder | Holds |
 |---|---|
-| `sim/scripts/` | the scripts, named after the question (`buck_ripple.py`), so the user can re-run them |
-| `sim/inputs/` | sourced inputs: fabricator stackup JSON, spec, values read from datasheets |
-| `sim/results/<run>/` | raw outputs of one run: check JSON, waveforms (CSV/NPZ), logs; a report's checks as JSON |
-| `sim/figures/<run>/` | that run's charts (PNG) |
-| `sim/results/cycle_log.json` | the optimisation cycle's history |
-| `sim/report_sources/` | Markdown sources of written reports |
-| `reports/` | the reports people read: **PDF only** (Word only when the user asks) |
+| `sim/` | the scripts, named after the question (`buck_ripple.py`), so the user can re-run them |
+| `iteration<N>/` | everything one evaluation produced; never overwritten by a later one |
+| `reports/` | the final reports people read (the engineering report, the cycle's final report). Word only when the user asks |
 
-`<run>` names one evaluation (`baseline`, `it1`, `it2`, ...). A script takes
-the run name as an argument and starts with
-`F = Folders.of_script(__file__, run).make()`.
+An iteration is one evaluation of one state of the design. A first verification is
+`iteration1`; each change to the schematic or board followed by a re-run is the next
+iteration (`Folders.next(project)`). Re-running the same state overwrites its own
+iteration only. A script takes the iteration number as an argument and starts with
+`F = Folders.of_script(__file__, iteration).make()`; its outputs go to `F.results`,
+`F.figures` and `F.iteration_reports`.
 
 - Write SPICE testbenches as plain SPICE text through the package's netlist
   runner, so an engineer can read and re-run them in any SPICE simulator.
@@ -143,14 +156,15 @@ status, method, sources, assumptions, what would complete it, and its graphs.
    first and referred to by figure number after that.
 3. **Further figures:** charts not tied to one check.
 
-Nothing else goes into `reports/`. The checks as JSON (read by
-`sim_cycle_record`) go to `sim/results/<run>/` (`data_dir`; default
-`sim/results/<name>/`). Add `"docx"` to `documents` only when the user asks for
-Word, and `"md"` only to debug the layout.
+Write an iteration's report to `iteration<N>/reports/<name>.pdf`. Nothing else goes
+into a reports folder: the summary chart goes to `iteration<N>/sim/figures/` and the
+checks as JSON (read by `sim_cycle_record`) to `iteration<N>/sim/results/`, which
+are the defaults for a report in `iteration<N>/reports/`. Add `"docx"` to
+`documents` only when the user asks for Word, and `"md"` only to debug the layout.
 
 A narrative engineering report (design choices, deliverables, results summary,
 recommendations) is written in Markdown to `sim/report_sources/`, with its
-figures linked from `sim/figures/<run>/` by relative path, and rendered into
+figures linked from `iteration<N>/sim/figures/` by relative path, and rendered into
 `reports/` with `sim_render_document(markdown, out_dir=<project>/reports)`. The
 PDF is the deliverable; the Markdown stays with the simulation files.
 
@@ -183,8 +197,8 @@ check is incomplete, otherwise PASS.
   | `sim_board_thermal` | Temperature map |
 
   Parts without a manufacturer curve fall back to their checks against their limits.
-- Pass `figures_dir` = `sim/figures/<run>/` of the project to every tool, so the graphs
-  stay with the run. Without it they go to the system temporary folder.
+- Pass `figures_dir` = `iteration<N>/sim/figures/` of the project to every tool, so the
+  graphs stay with the iteration. Without it they go to the system temporary folder.
 - `sim_write_report` and `Report.write` embed the checks' graphs. Every report also opens
   its figures with a chart of all numeric checks as margins to their limits, coloured by
   status. Checks with no graph of their own are listed under "Checks without a graph of

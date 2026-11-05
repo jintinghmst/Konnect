@@ -33,7 +33,7 @@
 | budget | output-voltage window at the load: both limits, every contribution |
 | figures | report charts: ripple summary and waveform grids from `converter.snapshot`, metric vs sweep, spectrum vs limit, Bode; embedded through `Report(figures=...)` |
 | document | the report as PDF (default) or Word, text and figures together: `Report.write(..., documents=...)`, `sim_write_report`, `sim_render_document` |
-| project | `Folders`: `sim/scripts`, `sim/inputs`, `sim/results/<run>`, `sim/figures/<run>`, `sim/report_sources`, `reports/` (PDF only) |
+| project | `Folders`: scripts in `sim/`, `sim/inputs`, `sim/report_sources`, `sim/cycle_log.json`, final `reports/`; per iteration `iteration<N>/sim/results`, `iteration<N>/sim/figures`, `iteration<N>/reports` (PDF only) |
 
 ## Coverage of a buck verification
 

@@ -186,15 +186,22 @@ def test_report_in_the_project_folders_links_figures_and_renders_pdf(tmp_path):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from konnect_sim.project import Folders
-    script = tmp_path / "proj" / "sim" / "scripts" / "eval.py"
-    F = Folders.of_script(script, "it2").make()
-    assert F.root == tmp_path / "proj" and F.figures == F.root / "sim/figures/it2" and F.reports.is_dir()
+    script = tmp_path / "proj" / "sim" / "eval.py"
+    F = Folders.of_script(script, 2).make()
+    assert F.root == tmp_path / "proj" and F.scripts == F.root / "sim" and F.run == "iteration2"
+    assert F.figures == F.root / "iteration2/sim/figures" and F.iteration_reports.is_dir()
+    assert Folders.of_script(F.root / "sim/scripts/old.py", "it2").root == F.root     # the older layout
+    assert Folders.iterations(F.root) == [2] and Folders.next(F.root).iteration == 3
     fig, ax = plt.subplots(); ax.plot([0, 1]); fig.savefig(F.figures / "a.png"); plt.close(fig)
     c1 = tools.evaluate_check("a", "<= 1", 0.5, 1.0, "max", "m", {"x": {"value": 1, "source": "s"}})
-    rep = tools.write_report("t", "d", [c1], str(F.reports), "r", figures=[{"title": "A", "path": str(F.figures / "a.png")}])
+    rep = tools.write_report("t", "d", [c1], str(F.iteration_reports), "r",
+                             figures=[{"title": "A", "path": str(F.figures / "a.png")}])
     assert Path(rep["pdf"]).stat().st_size > 5000 and "docx" not in rep and "md" not in rep
-    assert sorted(x.name for x in F.reports.iterdir()) == ["r.pdf"]       # the reports folder holds only the PDF
-    assert Path(rep["json"]) == F.root / "sim/results/r/r.json"
+    assert sorted(x.name for x in F.iteration_reports.iterdir()) == ["r.pdf"]   # the reports folder holds only the PDF
+    assert Path(rep["json"]) == F.results / "r.json"                          # data and chart stay in the iteration
+    assert (F.figures / "r_checks_vs_limits.png").is_file()
+    with pytest.raises(ValueError):
+        Folders(F.root, "baseline")
     fitz = pytest.importorskip("fitz")
     text = "".join(pg.get_text() for pg in fitz.open(rep["pdf"]))
     # summary first, then the tests, then figures not tied to a test

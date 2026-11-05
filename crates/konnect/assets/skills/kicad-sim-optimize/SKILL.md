@@ -35,7 +35,7 @@ Stop and report `BLOCKED` naming the missing item if any is absent:
    result: build these with the `kicad-schematic` and `kicad-pcb` skills first.
 2. A specification. Limits the user did not give stay **assumed**; the cycle
    may optimise against them but the final report keeps them assumed.
-3. A per-project simulation script in the project's `sim/scripts/` folder that
+3. A per-project simulation script in the project's `sim/` folder that
    follows the script contract below (write it with the `kicad-simulation`
    skill, which defines the project's simulation folders).
 4. KiCad running with the board open in the PCB Editor, reachable over IPC.
@@ -55,16 +55,19 @@ Stop and report `BLOCKED` naming the missing item if any is absent:
 
 The project script runs one full evaluation and records it in the cycle log.
 
-- Arguments: `--run <name>` (`baseline`, `it1`, ...), `--change "<what changed>"`,
-  `--drc <error count>`, `--erc <error count>`.
+- Arguments: `--iteration <N>` (1 is the baseline; each change is the next number,
+  `Folders.next(project)`), `--change "<what changed>"`, `--drc <error count>`,
+  `--erc <error count>`.
 - It reads the schematic through the package's netlist loader and the saved board
   through its layout loader, extracts the layout parasitics, runs the closed-form
-  and SPICE checks, writes raw outputs to `sim/results/<run>/` and charts to
-  `sim/figures/<run>/`, and writes `reports/<stem>_<run>.pdf` with the charts
-  embedded (its checks as JSON in `sim/results/<run>/`, passed to the cycle log).
+  and SPICE checks, writes raw outputs to `iteration<N>/sim/results/` and charts to
+  `iteration<N>/sim/figures/`, and writes `iteration<N>/reports/<stem>.pdf` with the
+  charts embedded (its checks as JSON in `iteration<N>/sim/results/`, passed to the
+  cycle log). A reverted change keeps its iteration folder as the record of what was
+  tried.
 - Every constraint carries value, limit, sense, whether it depends on the layout,
   and its lever.
-- It appends the iteration to `sim/results/cycle_log.json` through the package's
+- It appends the iteration to `sim/cycle_log.json` through the package's
   cycle log, prints the iteration table, and ends with one line:
   `DECISION: <continue|revert|met|stalled|limit> — <reason>`.
 
@@ -145,8 +148,8 @@ act on the decision:
 
 ## Final report
 
-Write it in Markdown to `sim/report_sources/`, embed the final run's charts from
-`sim/figures/<run>/`, and render the PDF into `reports/` with `sim_render_document`
+Write it in Markdown to `sim/report_sources/`, embed the final iteration's charts
+from `iteration<N>/sim/figures/`, and render the PDF into `reports/` with `sim_render_document`
 (`out_dir`). It holds:
 
 - The iteration table from the cycle log (change, misses, worst margin,

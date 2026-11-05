@@ -16,8 +16,8 @@ KiCad first. Coordinates are board millimetres, pads are [reference, pad].
 Every simulation tool also draws its result (``konnect_sim.figures``) and returns the
 graphs as ``figures`` [{"title", "path"}], attached to its checks as well, so
 ``write_report`` embeds them. They go to ``figures_dir`` (the project's
-``sim/figures/<run>``); without one, to a ``konnect_sim/figures`` folder in the
-system temporary directory.
+``iteration<N>/sim/figures``); without one, to a ``konnect_sim/figures`` folder in
+the system temporary directory.
 """
 from __future__ import annotations
 
@@ -601,8 +601,8 @@ def write_report(title: str, design: str, checks: list, out_dir: str, stem: str,
     further PNGs. The verdict follows the report rules; ``ungraphed`` lists
     checks with no graph of their own. The chart goes to ``figures_dir`` and the
     checks as JSON (for sim_cycle_record) to ``data_dir``: by default
-    ``<project>/sim/figures/<stem>`` and ``<project>/sim/results/<stem>`` for a
-    report in ``<project>/reports``. ``documents``: ["pdf"] (default); add
+    ``iteration<N>/sim/figures`` and ``iteration<N>/sim/results`` for a report in
+    ``<project>/iteration<N>/reports`` (the usual place). ``documents``: ["pdf"] (default); add
     "docx" for Word or "md" to keep the Markdown source."""
     fields = set(report.Check.__dataclass_fields__)
     figs = [(f["title"], f["path"]) for f in (figures or [])]
