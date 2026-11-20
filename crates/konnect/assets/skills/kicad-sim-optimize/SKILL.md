@@ -59,14 +59,19 @@ The project script runs one full evaluation and records it in the cycle log.
   `Folders.next(project)`), `--change "<what changed>"`, `--drc <error count>`,
   `--erc <error count>`.
 - It reads the schematic through the package's netlist loader and the saved board
-  through its layout loader, extracts the layout parasitics, runs the closed-form
-  and SPICE checks, writes raw outputs to `iteration<N>/sim/results/` and charts to
+  through its layout loader, extracts the lumped parasitic network
+  (`parasitics.extract_buck`, saved to `iteration<N>/sim/results/parasitics.json`),
+  runs the closed-form, closed-loop (`Lumped.apply_plant`) and SPICE
+  (`Lumped.apply_testbench`) checks with it, writes raw outputs to `iteration<N>/sim/results/` and charts to
   `iteration<N>/sim/figures/`, and writes `iteration<N>/reports/<stem>.pdf` with the
   charts embedded (its checks as JSON in `iteration<N>/sim/results/`, passed to the
   cycle log). A reverted change keeps its iteration folder as the record of what was
   tried.
 - Every constraint carries value, limit, sense, whether it depends on the layout,
-  and its lever.
+  and its lever. A layout-dependent constraint also records its value without the
+  network (ideal copper), so the report shows what the layout costs.
+- Objectives are elements of the network: `l_hot_h`, `r_out_ohm` + `r_gnd_ohm`,
+  `l_mount_cout_h`, `c_sw_f`.
 - It appends the iteration to `sim/cycle_log.json` through the package's
   cycle log, prints the iteration table, and ends with one line:
   `DECISION: <continue|revert|met|stalled|limit> — <reason>`.
@@ -158,6 +163,7 @@ from `iteration<N>/sim/figures/`, and render the PDF into `reports/` with `sim_r
 - The constraints that still miss and why. Separately, the checks that meet but
   stay `INCOMPLETE`, with the evidence that would close them (part numbers,
   vendor model, measurement).
-- What the parasitic extraction does not model (pours in path resistance,
+- The final lumped network (table and figure) and what it does not model (its
+  `unmodelled` list, branches too long to lump, mutual inductance between branches,
   absolute switch-node peak, EMI). Say that bench measurement is the final
   arbiter for those.

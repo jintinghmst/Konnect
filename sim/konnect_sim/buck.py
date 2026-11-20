@@ -22,6 +22,9 @@ import numpy as np
 from .spice import run_netlist
 
 
+SOLVER_LADDER = ("method=gear reltol=1e-4", "method=gear maxord=2 reltol=1e-4", "method=trap reltol=1e-4")
+
+
 # ── Closed-form ────────────────────────────────────────────────────────────
 
 def duty(vin: float, vout: float) -> float:
@@ -76,6 +79,7 @@ class CapBank:
     count: int
     esr_each_ohm: float
     esl_each_h: float = 0.5e-9
+    l_mount_h: float = 0.0        # pads, vias and plane connection of one capacitor (layout)
 
     @property
     def c_total(self) -> float:
@@ -110,6 +114,10 @@ class BuckTestbench:
     c_vin_pin_f: float = 100e-12  # capacitance at the IC VIN pin (used with l_hot_h)
     r_sw_path_ohm: float = 0.0    # SW pin -> inductor copper
     r_out_path_ohm: float = 0.0   # output capacitors -> load point copper
+    l_sw_path_h: float = 0.0      # SW pin -> inductor, series inductance
+    l_out_path_h: float = 0.0     # output capacitors -> load point, series inductance
+    r_gnd_path_ohm: float = 0.0   # load ground -> IC ground copper
+    l_gnd_path_h: float = 0.0
     # Bootstrap (0 = not modelled): C_boot from VBST to SW, charged from the
     # internal drive supply v_drv through the bootstrap diode.
     c_boot_f: float = 0.0
@@ -123,7 +131,7 @@ class BuckTestbench:
         lines = []
         for i, b in enumerate(banks):
             # n identical caps in parallel = one cap of n*C with ESR/n and ESL/n.
-            c, esr, esl = b.c_total, b.esr_each_ohm / b.count, b.esl_each_h / b.count
+            c, esr, esl = b.c_total, b.esr_each_ohm / b.count, (b.esl_each_h + b.l_mount_h) / b.count
             lines += [
                 f"C{name}{i} {node} {name}{i}a {c:.6e} IC={{VCAP}}",
                 f"R{name}{i} {name}{i}a {name}{i}b {esr:.6e}",
@@ -131,7 +139,7 @@ class BuckTestbench:
             ]
         return lines
 
-    def netlist(self, d: float) -> str:
+    def netlist(self, d: float, options: str = "method=gear reltol=1e-4") -> str:
         t = 1 / self.fsw
         on = d * t - self.dead_time_s
         off = (1 - d) * t - 2 * self.dead_time_s
@@ -165,7 +173,8 @@ class BuckTestbench:
             # body diode of the low-side FET carries current during dead time
             "DLS 0 sw DBODY",
             f"CSW sw 0 {self.c_sw_f:.6e}",
-            f"RSWP sw swl {max(self.r_sw_path_ohm, 1e-6):.6e}",
+            f"RSWP sw swp {max(self.r_sw_path_ohm, 1e-6):.6e}",
+            f"LSWP swp swl {self.l_sw_path_h:.6e}" if self.l_sw_path_h > 0 else "VSWP swp swl DC 0",
             f"L1 swl lx {self.l_h:.6e} IC={self.iout}",
             f"RDCR lx vout {self.l_dcr_ohm:.6e}",
         ]
@@ -176,18 +185,31 @@ class BuckTestbench:
                       ".model DBST D(IS=1e-9 N=1.2 RS=1)"]
         lines += [l.replace("{VCAP}", str(self.vout_target)) for l in self._bank_lines("OUT", "vout", self.cout)]
         lines += [
-            f"ROUTP vout vload {max(self.r_out_path_ohm, 1e-6):.6e}",
-            f"RLOAD vload 0 {rload:.6e}",
+            f"ROUTP vout vop {max(self.r_out_path_ohm, 1e-6):.6e}",
+            f"LOUTP vop vload {self.l_out_path_h:.6e}" if self.l_out_path_h > 0 else "VOUTP vop vload DC 0",
+            # the load's ground returns to the IC ground through the board's copper
+            f"RLOAD vload lgnd {rload:.6e}",
+            f"RGNDP lgnd lgp {max(self.r_gnd_path_ohm, 1e-6):.6e}",
+            f"LGNDP lgp 0 {self.l_gnd_path_h:.6e}" if self.l_gnd_path_h > 0 else "VGNDP lgp 0 DC 0",
             ".model DBODY D(IS=1e-12 N=1.05 RS=0.01)",
             f".tran {t / 400:.4e} {tstop:.6e}" + (f" 0 {self.tmax_s:.4e}" if self.tmax_s else "") + " UIC",
-            ".options method=gear reltol=1e-4",
+            f".options {options}",
             ".end",
         ]
         # Cin starts charged to Vin.
         return "\n".join(l.replace("{VCAP}", str(self.vin)) for l in lines)
 
     def run(self, d: float) -> dict:
-        res = run_netlist(self.netlist(d))
+        # A high-Q hot loop (L_hot with the input capacitors' ESL and mounting inductance)
+        # can defeat ngspice's step control at particular values. The same circuit
+        # integrated by another method is an equally valid solution, so retry with one.
+        for options in SOLVER_LADDER:
+            try:
+                res = run_netlist(self.netlist(d, options))
+                break
+            except Exception:
+                if options == SOLVER_LADDER[-1]:
+                    raise
         t = res["time"]
         t_end = t[-1]
         w = t >= t_end - self.measure_cycles / self.fsw
@@ -200,10 +222,12 @@ class BuckTestbench:
         icin = sum((res[f"in{i}a"][w] - res[f"in{i}b"][w]) / (b.esr_each_ohm / b.count)
                    for i, b in enumerate(self.cin))
         tw = t[w]
+        vload = res["vload"][w] - res["lgnd"][w]      # across the load
         def rms(x):
             return math.sqrt(np.trapezoid(x**2, tw) / (tw[-1] - tw[0]))
         return {
             "duty": d,
+            "solver": options,
             "vout_avg": float(np.trapezoid(vout, tw) / (tw[-1] - tw[0])),
             "vout_pp": float(vout.max() - vout.min()),
             "vin_pp": float(vin.max() - vin.min()),
@@ -211,8 +235,8 @@ class BuckTestbench:
             "il_pp": float(il.max() - il.min()),
             "il_peak": float(il.max()),
             "icin_rms": rms(icin),
-            "vload_avg": float(np.trapezoid(res["vload"][w], tw) / (tw[-1] - tw[0])),
-            "vload_pp": float(res["vload"][w].max() - res["vload"][w].min()),
+            "vload_avg": float(np.trapezoid(vload, tw) / (tw[-1] - tw[0])),
+            "vload_pp": float(vload.max() - vload.min()),
             "vsw_max": float(res["sw"][w].max()),
         }
 

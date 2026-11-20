@@ -17,6 +17,7 @@
 | units | parse KiCad value text such as "22uF 16V" or "470pF DNP" |
 | report | checks with status, method, sources, assumptions and graphs; one PDF (summary first, then each test with its figures), the checks as JSON in `sim/results/` |
 | buck | buck design equations, a switched open-loop SPICE testbench (optionally with layout parasitics and an edge-resolved run), and extraction of a buck layout's parasitics |
+| parasitics | the layout as a lumped network: series R and L of the input path, hot loop, SW path, output path (feedback junction to load) and ground return, switch-node copper C, capacitor mounting L; `extract_buck` (or `sim_layout_parasitics`), then `Lumped.apply_plant` into `converter` and `Lumped.apply_testbench` into `buck`; `check_lumping` for the edge-rate limit |
 | layout | read a saved board (read-only): pads, tracks, vias, pours and their fills, stackup; copper path resistance, loop and via inductance, IPC-2221 track width |
 | cycle | iteration log and continue / revert / met / stalled / limit decisions for the optimisation cycle |
 | stackup | stackup with provenance: the board's own, or a fabricator's published stackup as JSON with its source; applied to a board for every extraction |
@@ -40,6 +41,7 @@
 | Item | Check | Module | PASS/FAIL needs |
 |---|---|---|---|
 | Ground connectivity and extraction | load ground connected through fill; return R; plane partial L | copper, buck.layout_parasitics | zones filled and saved |
+| Layout parasitics in every check | lumped R/L/C of each power branch inserted into the closed-loop and SPICE models | parasitics | saved board with filled zones; sourced stackup and εr |
 | Stackup | copper, gaps, εr from a source | stackup | board stackup or fab document |
 | Closed-loop regulation | DC output over line and load | scenarios.regulation | validated controller model |
 | Stability | PM/GM by injection over line, load, Cout/ESR corners | converter.loop_gain, scenarios.stability | validated controller model; injection with `snr_ok` |

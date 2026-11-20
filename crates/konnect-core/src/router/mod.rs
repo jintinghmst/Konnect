@@ -211,6 +211,7 @@ mod tests {
                         "sim_cycle_record/properties/objectives" |
                         "sim_evaluate_check/properties/inputs" |
                         "sim_layout_calc/properties/params" |
+                        "sim_layout_parasitics/properties/nets" |
                         "sim_write_report/properties/checks/items"
                     ),
                         "unreviewed open input record: {path}"

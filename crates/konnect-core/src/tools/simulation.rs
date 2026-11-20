@@ -181,6 +181,19 @@ sheet_resistance {copper_mm, temp_c?}."#,
             json!({"type": "object", "properties": {"kind": {"enum": ["microstrip", "via_inductance", "via_resistance", "ipc2221_width", "ipc2221_current", "skin_resistance", "loop_inductance", "sheet_resistance"]}, "params": {"type": "object", "additionalProperties": {"anyOf": [{"type": "number"}, {"type": "boolean"}, {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2}}]}, "description": "the kind's parameters, see the description"}}, "required": ["kind", "params"]}),
             |args, ctx| async move { handle_sim_layout_calc(args, ctx).await }
         ),
+        tool!(
+            "sim_layout_parasitics",
+            r#"Lumped copper parasitics of a buck converter layout, for its simulations:
+series R and L of the input path, hot loop, SW path, output path (from the
+feedback junction to the load) and ground return; the switch-node copper C; and
+the mounting inductance of each input and output capacitor (vias to the plane).
+``nets`` renames {VIN, GND, SW, VOUT}; ``er`` the dielectric (sourced or assumed).
+``out_json`` saves the network, which scripts load with
+``parasitics.Lumped.load`` and insert with ``apply_plant`` / ``apply_testbench``.
+``t_rise_s`` lists branches too long to lump for that edge. Graph: L and R per branch."#,
+            json!({"type": "object", "properties": {"board": {"type": "string"}, "ic": {"type": "string"}, "ic_vin": {"type": "string"}, "ic_gnd": {"type": "string"}, "ic_sw": {"type": "string"}, "cin_refs": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "cout_refs": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "inductor": {"type": "string"}, "sense": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad] of the feedback tap on VOUT"}, "load_vout": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "load_gnd": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "sense_gnd": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad] of the IC / divider ground"}, "source_vin": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad] of the input connector's VIN"}, "nets": {"type": "object", "additionalProperties": {"type": "string"}, "description": "{VIN, GND, SW, VOUT: board net name} when they differ"}, "er": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}, "name": {"type": "string"}}, "required": ["value"]}], "default": 4.5}, "t_rise_s": {"type": "number"}, "pitch_mm": {"type": "number", "default": 0.1}, "stackup_json": {"type": "string"}, "out_json": {"type": "string"}, "figures_dir": {"type": "string"}}, "required": ["board", "ic", "ic_vin", "ic_gnd", "ic_sw", "cin_refs", "cout_refs", "inductor", "sense", "load_vout", "load_gnd", "sense_gnd"]}),
+            |args, ctx| async move { handle_sim_layout_parasitics(args, ctx).await }
+        ),
     ]
 }
 
@@ -195,7 +208,7 @@ itself in design/records/; "docx" in ``documents`` adds Word). Each requirement:
 condition), criterion (pass criterion), origin (user / assumed / "standard:
 <doc>" / "datasheet: <doc>"), rationale, verification}. Rewriting it with
 any change starts the next draft revision; only sim_approve_record accepts it."#,
-            json!({"type": "object", "properties": {"project_dir": {"type": "string"}, "title": {"type": "string"}, "requirements": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "properties": {"id": {"type": "string", "description": "R-01, R-02, ..."}, "category": {"type": "string"}, "parameter": {"type": "string"}, "condition": {"type": "string", "description": "test condition"}, "criterion": {"type": "string", "description": "proposed pass criterion"}, "origin": {"type": "string", "description": "user | assumed | standard: <doc> | datasheet: <doc>"}, "rationale": {"type": "string"}, "verification": {"type": "string", "description": "simulation and bench test"}}, "required": ["id", "category", "parameter", "condition", "criterion"]}}, "brief": {"type": "string", "default": ""}, "notes": {"type": "array", "items": {"type": "string"}}, "change": {"type": "string", "default": ""}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\", \"docx\"]"}}, "required": ["project_dir", "title", "requirements"]}),
+            json!({"type": "object", "properties": {"project_dir": {"type": "string"}, "title": {"type": "string"}, "requirements": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "properties": {"id": {"type": "string", "description": "R-01, R-02, ..."}, "category": {"type": "string"}, "parameter": {"type": "string"}, "condition": {"type": "string", "description": "test condition"}, "criterion": {"type": "string", "description": "proposed pass criterion"}, "origin": {"type": "string", "description": "user | assumed | standard: <doc> | datasheet: <doc>"}, "rationale": {"type": "string"}, "verification": {"type": "string", "description": "simulation and bench test"}}, "required": ["id", "category", "parameter", "condition", "criterion"]}}, "brief": {"type": "string", "default": ""}, "notes": {"type": "array", "items": {"type": "string"}}, "change": {"type": "string", "default": ""}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\"]"}}, "required": ["project_dir", "title", "requirements"]}),
             |args, ctx| async move { handle_sim_write_spec(args, ctx).await }
         ),
         tool!(
@@ -205,7 +218,7 @@ design/02_part_selection.pdf. Refused until the specification is accepted.
 Each part: {role, part (MPN), reasons [..], requirements [ids it serves],
 manufacturer, key_values, alternatives [..], datasheet, sourcing,
 references, risks}; every cited id must exist in the specification."#,
-            json!({"type": "object", "properties": {"project_dir": {"type": "string"}, "title": {"type": "string"}, "parts": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "properties": {"role": {"type": "string"}, "part": {"type": "string", "description": "MPN"}, "reasons": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "requirements": {"type": "array", "items": {"type": "string"}, "description": "ids of the requirements it serves"}, "manufacturer": {"type": "string"}, "key_values": {"type": "string"}, "alternatives": {"type": "array", "items": {"type": "string"}}, "datasheet": {"type": "string"}, "sourcing": {"type": "string"}, "references": {"type": "string"}, "risks": {"type": "string"}}, "required": ["role", "part", "reasons", "requirements"]}}, "notes": {"type": "array", "items": {"type": "string"}}, "change": {"type": "string", "default": ""}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\", \"docx\"]"}}, "required": ["project_dir", "title", "parts"]}),
+            json!({"type": "object", "properties": {"project_dir": {"type": "string"}, "title": {"type": "string"}, "parts": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "properties": {"role": {"type": "string"}, "part": {"type": "string", "description": "MPN"}, "reasons": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "requirements": {"type": "array", "items": {"type": "string"}, "description": "ids of the requirements it serves"}, "manufacturer": {"type": "string"}, "key_values": {"type": "string"}, "alternatives": {"type": "array", "items": {"type": "string"}}, "datasheet": {"type": "string"}, "sourcing": {"type": "string"}, "references": {"type": "string"}, "risks": {"type": "string"}}, "required": ["role", "part", "reasons", "requirements"]}}, "notes": {"type": "array", "items": {"type": "string"}}, "change": {"type": "string", "default": ""}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\"]"}}, "required": ["project_dir", "title", "parts"]}),
             |args, ctx| async move { handle_sim_write_part_selection(args, ctx).await }
         ),
         tool!(
@@ -213,7 +226,7 @@ references, risks}; every cited id must exist in the specification."#,
             r#"Record the user's acceptance of the current revision of the
 specification or part selection. Call only after the user has accepted it
 in their own words, and pass those words as ``statement``."#,
-            json!({"type": "object", "properties": {"project_dir": {"type": "string"}, "record": {"enum": ["specification", "part_selection"]}, "approved_by": {"type": "string"}, "statement": {"type": "string"}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\", \"docx\"]"}}, "required": ["project_dir", "record", "approved_by", "statement"]}),
+            json!({"type": "object", "properties": {"project_dir": {"type": "string"}, "record": {"enum": ["specification", "part_selection"]}, "approved_by": {"type": "string"}, "statement": {"type": "string"}, "documents": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\"]"}}, "required": ["project_dir", "record", "approved_by", "statement"]}),
             |args, ctx| async move { handle_sim_approve_record(args, ctx).await }
         ),
         tool!(
@@ -555,6 +568,39 @@ async fn handle_sim_layout_calc(
     _ctx: &ToolContext,
 ) -> anyhow::Result<CallToolResult> {
     run_sim("sim_layout_calc", args, &["kind", "params"]).await
+}
+
+async fn handle_sim_layout_parasitics(
+    args: &Value,
+    _ctx: &ToolContext,
+) -> anyhow::Result<CallToolResult> {
+    run_sim(
+        "sim_layout_parasitics",
+        args,
+        &[
+            "board",
+            "ic",
+            "ic_vin",
+            "ic_gnd",
+            "ic_sw",
+            "cin_refs",
+            "cout_refs",
+            "inductor",
+            "sense",
+            "load_vout",
+            "load_gnd",
+            "sense_gnd",
+            "source_vin",
+            "nets",
+            "er",
+            "t_rise_s",
+            "pitch_mm",
+            "stackup_json",
+            "out_json",
+            "figures_dir",
+        ],
+    )
+    .await
 }
 
 async fn handle_sim_write_spec(args: &Value, _ctx: &ToolContext) -> anyhow::Result<CallToolResult> {

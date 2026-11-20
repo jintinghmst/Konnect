@@ -10,6 +10,9 @@ in every script:
 - ``report``  : spec checks with explicit status, method and assumptions
 - ``buck``    : buck-converter design equations, a switched SPICE testbench,
                 and extraction of a buck layout's parasitics
+- ``parasitics``: the board's copper as a lumped R/L/C network (input path, hot
+                loop, SW path and node, output path, ground return, capacitor
+                mounting) inserted into ``converter`` and ``buck``
 - ``layout``  : read a saved board (read-only) and estimate copper resistance,
                 loop and via inductance, and IPC-2221 track width
 - ``cycle``   : iteration log and stop rules for the simulate -> change cycle
@@ -41,7 +44,7 @@ produced it and the assumptions it rests on. A check whose inputs are assumed
 rather than sourced is reported as INCOMPLETE, never PASS.
 """
 
-__all__ = ["spice", "netlist", "units", "report", "buck", "layout", "cycle", "stackup", "copper",
+__all__ = ["spice", "netlist", "units", "report", "buck", "parasitics", "layout", "cycle", "stackup", "copper",
            "parts", "losses", "thermal", "converter", "scenarios", "stress", "inputfilter", "emi",
            "corners", "budget", "figures", "document", "project", "design"]
 __version__ = "0.3.0"

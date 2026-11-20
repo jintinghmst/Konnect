@@ -72,11 +72,13 @@ def _direct_labels(ax, x_end, ends, span):
                     va="center", fontsize=8, annotation_clip=False)
 
 
-def metric_vs_x(path, x, panels: list[dict], *, xlabel: str, title: str = "", note: str = "") -> str:
-    """One panel per metric. ``panels``: [{"title", "series": {label: ys}, "limit": y | None,
+def metric_vs_x(path, x, panels: list[dict], *, xlabel: str, title: str = "", note: str = "",
+                panel_width: float = 3.9) -> str:
+    """One panel per metric, the metric on y against ``x``. ``panels``: [{"title", "ylabel",
+    "series": {label: ys}, "limit": y | None,
     "limit_label": str, "limit_below": bool, "limit_x": 0..1, "ymax": float | None}]."""
     plt = _plt()
-    fig, axs = plt.subplots(1, len(panels), figsize=(3.9 * len(panels), 3.8), squeeze=False)
+    fig, axs = plt.subplots(1, len(panels), figsize=(panel_width * len(panels), 3.8), squeeze=False)
     for ax, p in zip(axs[0], panels):
         for (lab, ys), (c, mk) in zip(p["series"].items(), SERIES):
             ax.plot(x, ys, color=c, marker=mk, label=lab)
@@ -86,9 +88,7 @@ def metric_vs_x(path, x, panels: list[dict], *, xlabel: str, title: str = "", no
             limit_line(ax, p["limit"], p.get("limit_label", "limit"), x=p.get("limit_x", 0.0),
                        below=p.get("limit_below", False))
         _direct_labels(ax, x[-1], [(ys[-1], lab) for lab, ys in p["series"].items()], top)
-        ax.set_title(p["title"]); ax.set_xlabel(xlabel)
-    if len(next(iter(panels))["series"]) > 1:
-        axs[0][0].legend(loc="center right")
+        ax.set_title(p["title"]); ax.set_xlabel(xlabel); ax.set_ylabel(p.get("ylabel", ""))
     if title:
         fig.suptitle(title, color=INK)
     if note:
@@ -191,7 +191,10 @@ def ripple_figures(out_dir, snaps: dict, vins: list[float], loads: list[float], 
                    key=lambda vin, i: f"{vin:g}V_{i:g}A") -> list[tuple[str, str]]:
     """The standard ripple set for a switching converter, from ``converter.snapshot`` arrays
     (rows t, vin, vload, il, vsw) keyed by ``key(vin, load)``. Limits in volts / amperes.
-    Returns [(title, path)] for ``Report.figures``.
+    Returns [(title, path)] for ``Report.figures``: output voltage ripple vs load current
+    (one line per input voltage, against its limit), input and inductor ripple vs load
+    current, then waveform grids. Sweep at least five loads from light load to the maximum
+    so the ripple-vs-current curves have a shape.
 
     Every peak-to-peak value is taken over the whole snapshot, the window the checks measure;
     with ``period`` the waveform grids draw only its last ``draw_cycles`` switching periods.
@@ -214,21 +217,26 @@ def ripple_figures(out_dir, snaps: dict, vins: list[float], loads: list[float], 
     if live:
         def ser(row, scale):
             return {f"Vin {v:g} V": [get(v, i, row)[2] * scale for i in live] for v in vins}
-        panels = [{"title": "Output ripple (mVpp)", "series": ser(2, 1e3),
-                   "limit": vout_pp_max * 1e3 if vout_pp_max else None,
-                   "limit_label": f"limit {vout_pp_max * 1e3:g} mVpp" if vout_pp_max else ""},
-                  {"title": "Input ripple at the IC (mVpp)", "series": ser(1, 1e3),
-                   "limit": vin_pp_max * 1e3 if vin_pp_max else None,
-                   "limit_label": f"limit {vin_pp_max * 1e3:g} mVpp" if vin_pp_max else ""},
-                  {"title": "Inductor current ripple (App)", "series": ser(3, 1.0), "limit": il_pp_target,
-                   "limit_label": f"target {il_pp_target:g} App" if il_pp_target else "", "limit_below": True,
-                   "limit_x": 0.45}]
         skipped = [i for i in loads if i not in live]
         note = "; ".join(f"{i:g} A not plotted: " + not_modelled.get(i, "no switching cycle in the window")
                          for i in skipped)
-        figs.append(("Ripple summary", metric_vs_x(out / "fig_ripple_summary.png", live, panels,
-                                                   xlabel="load current (A)", note=note,
-                                                   title="Ripple at every operating point")))
+        vout = {"title": "Output voltage ripple (mVpp)", "ylabel": "output ripple (mVpp)",
+                "series": ser(2, 1e3), "limit": vout_pp_max * 1e3 if vout_pp_max else None,
+                "limit_label": f"limit {vout_pp_max * 1e3:g} mVpp" if vout_pp_max else ""}
+        figs.append(("Output ripple vs load current",
+                     metric_vs_x(out / "fig_ripple_vs_load.png", live, [vout], xlabel="load current (A)", note=note,
+                                 title="Output voltage ripple vs load current, one line per input voltage",
+                                 panel_width=6.5)))
+        panels = [{"title": "Input ripple at the IC (mVpp)", "ylabel": "input ripple (mVpp)",
+                   "series": ser(1, 1e3),
+                   "limit": vin_pp_max * 1e3 if vin_pp_max else None,
+                   "limit_label": f"limit {vin_pp_max * 1e3:g} mVpp" if vin_pp_max else ""},
+                  {"title": "Inductor current ripple (App)", "ylabel": "inductor ripple current (App)",
+                   "series": ser(3, 1.0), "limit": il_pp_target,
+                   "limit_label": f"target {il_pp_target:g} App" if il_pp_target else ""}]
+        figs.append(("Input and inductor ripple vs load current",
+                     metric_vs_x(out / "fig_ripple_summary.png", live, panels, xlabel="load current (A)", note=note,
+                                 title="Input and inductor ripple vs load current", panel_width=4.5)))
     empty = "\n".join(sorted(set(not_modelled.values()))) or "pulse skipping:\nno switching cycle\nin the window"
     common = dict(rows=vins, cols=loads, row_label=lambda v: f"Vin {v:g} V", col_label=lambda i: f"{i:g} A",
                   empty_text=empty)
@@ -290,15 +298,15 @@ def checks_vs_limits(path, checks, *, title: str = "Checks against their limits"
 def curves(path, panels: list[dict], *, title: str, xlabel: str, logx: bool = False, logy: bool = False,
            note: str = "") -> str:
     """Stacked panels sharing x. ``panels``: [{"ylabel", "series": {label: (x, y)}, "limits":
-    [(y, label)], "marks": [(x, y, label)], "vlines": [(x, label)]}]."""
+    [(y, label) or (y, label, label x as axes fraction)], "marks": [(x, y, label)], "vlines": [(x, label)]}]."""
     plt = _plt()
     fig, axs = plt.subplots(len(panels), 1, figsize=(6.8, 1.0 + 2.3 * len(panels)), sharex=True, squeeze=False)
     for ax, p in zip(axs[:, 0], panels):
         series = p.get("series", {})
         for (lab, (x, y)), (c, _) in zip(series.items(), SERIES * 4):
             ax.plot(x, y, color=c, lw=1.6, label=lab)
-        for y, lab in p.get("limits", []):
-            limit_line(ax, y, lab, x=0.02)
+        for lim in p.get("limits", []):          # (y, label) or (y, label, x as axes fraction)
+            limit_line(ax, lim[0], lim[1], x=lim[2] if len(lim) > 2 else 0.02)
         for x, lab in p.get("vlines", []):
             ax.axvline(x, color=MUTED, lw=1.0, ls=":")
             ax.annotate(lab, xy=(x, 0), xycoords=("data", "axes fraction"), xytext=(3, 3),

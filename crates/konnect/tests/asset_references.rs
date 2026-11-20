@@ -779,6 +779,19 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         "via_inductance",
         "thickness_mm",
         "l_per_m",
+        // kicad-simulation / kicad-sim-optimize: the simulation package's parasitics
+        // module (`parasitics.extract_buck`, `Lumped.apply_plant`) and its fields.
+        "extract_buck",
+        "apply_plant",
+        "apply_testbench",
+        "check_lumping",
+        "markdown_table",
+        "too_long_to_lump",
+        "l_hot_h",
+        "r_out_ohm",
+        "r_gnd_ohm",
+        "l_mount_cout_h",
+        "c_sw_f",
     ];
 
     let mut phantom = Vec::new();

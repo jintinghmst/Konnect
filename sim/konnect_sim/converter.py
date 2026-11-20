@@ -2,9 +2,16 @@
 
 The power stage is integrated as a switched state-space model (fixed step,
 RK4): source and cable (R, L), input and output capacitor banks (C with DC-bias
-curve, ESR), inductor (L(I) curve, DCR), high- and low-side switches with
-on-resistance, body diodes and discontinuous conduction, output copper to the
-load, and the feedback divider with an optional series injection source. The
+curve, ESR, ESL plus mounting inductance), inductor (L(I) curve, DCR), high- and
+low-side switches with on-resistance, body diodes and discontinuous conduction,
+the board's lumped copper parasitics (``parasitics.Lumped.apply_plant``: SW-path
+resistance, output path and ground return R and L to the load), and the feedback
+divider with an optional series injection source.
+
+Series inductances in the output network are lumped and solved algebraically,
+v = L di/dt with di/dt taken from the inductor's and the load's current slopes, so
+they add no state: the output capacitors' ESL and mounting inductance put the
+ESL step into the ripple, and the output-path inductance adds L di/dt to a load step. The
 controller is evaluated every step from the same measurements a real IC sees.
 
 Controllers (``COT``, ``VoltageMode``, ``PeakCurrentMode``) are behavioural
@@ -34,11 +41,14 @@ import numpy as np
 
 @dataclass
 class Bank:
-    """``count`` identical parallel capacitors. ``c_vs_v``: [(V, C/C_nom)]."""
+    """``count`` identical parallel capacitors. ``c_vs_v``: [(V, C/C_nom)]. ``esl_h``: the
+    part's ESL (datasheet); ``l_mount_h``: its pads, vias and plane connection (layout)."""
     c_f: float
     esr_ohm: float
     count: int = 1
     c_vs_v: list[tuple[float, float]] | None = None
+    esl_h: float = 0.0
+    l_mount_h: float = 0.0
 
     def c_at(self, v: float) -> float:
         if self.c_vs_v:
@@ -65,8 +75,12 @@ class Plant:
     r_body: float = 0.02
     src_r_ohm: float = 0.05
     src_l_h: float = 1e-6
-    r_out_path: float = 0.0         # output caps to the load point
+    r_out_path: float = 0.0         # output caps to the load point (VOUT copper)
     sense_at_load: bool = True       # divider tap at the load (else at the caps)
+    r_sw_path: float = 0.0          # SW pin to the inductor (copper)
+    l_out_path: float = 0.0         # output caps to the load point, series inductance
+    r_gnd_path: float = 0.0         # load ground back to the IC / divider ground (copper)
+    l_gnd_path: float = 0.0
     l_vs_i: list[tuple[float, float]] | None = None   # (A, L/L_nom)
 
     def l_at(self, i: float) -> float:
@@ -474,6 +488,14 @@ class Sim:
         self.x = [0.0, 0.0] + [vi] * len(plant.cin) + [v0_out] * len(plant.cout)
         self.idle = True       # inductor current clamped at zero (DCM)
         self.hs_times: list[float] = []
+        # output capacitors' series inductance (ESL + mounting) in parallel; zero when
+        # any bank has none, since that bank then shorts the others at the edge
+        lc = [(b.esl_h + b.l_mount_h) / b.count for b in plant.cout]
+        self.l_cout = 1 / sum(1 / l for l in lc) if lc and min(lc) > 0 else 0.0
+
+    def _di_load(self, t: float) -> float:
+        h = 1e-9
+        return (self.load.i(t + h) - self.load.i(t - h)) / (2 * h)
 
     def snapshot(self):
         return copy.deepcopy(self)
@@ -495,7 +517,7 @@ class Sim:
             gs = 1 / p.src_r_ohm
             vin = (self.vin_fn(t) * gs - i_draw + sum(b.g * v for b, v in zip(p.cin, vci))) / (gin + gs)
         gout = sum(b.g for b in p.cout)
-        gl = load_g / (1 + load_g * p.r_out_path) if load_g else 0.0
+        gl = load_g / (1 + load_g * (p.r_out_path + p.r_gnd_path)) if load_g else 0.0
         gl += 1 / (p.r_top + p.r_bot)              # the feedback divider loads the output too
         vout = (il - load_i + sum(b.g * v for b, v in zip(p.cout, vco))) / (gout + gl)
         if load_i > 0 and vout < self.load.von:
@@ -507,7 +529,6 @@ class Sim:
             vout = (il - load_i + sum(b.g * v for b, v in zip(p.cout, vco))) / (gout + gl + gd)
             load_i += vout * gd                       # the discharge path, counted as load
         iload = load_i + vout * gl
-        vload = vout - iload * p.r_out_path
         if hs:
             vsw = vin - il * p.rds_hs
         elif ls:
@@ -518,23 +539,34 @@ class Sim:
             vsw = -p.vf_body - il * p.r_body
         else:
             vsw = vin + p.vf_body - il * p.r_body
-        return vin, vout, vload, vsw, iload, vci, vco
+        # Lumped series inductance: the capacitor bank's node (ESR side) is ``vbank``; the
+        # output pins sit L_cout * di_cap/dt above it, di_cap/dt = di_L/dt - di_load/dt.
+        vbank, di_load = vout, self._di_load(t)
+        if self.l_cout > 0:
+            if hs or ls or not self.idle:
+                k = self.l_cout / p.l_at(il)
+                vout = (vbank + k * (vsw - il * (p.dcr_ohm + p.r_sw_path)) - self.l_cout * di_load) / (1 + k)
+            else:
+                vout = vbank - self.l_cout * di_load
+        vsense = vout - iload * p.r_out_path - p.l_out_path * di_load      # load VOUT pad, vs IC ground
+        vload = vsense - iload * p.r_gnd_path - p.l_gnd_path * di_load    # across the load
+        return vin, vout, vload, vsw, iload, vci, vco, vbank, vsense
 
     def _deriv(self, x, t, hs, ls):
         p = self.p
-        vin, vout, vload, vsw, iload, vci, vco = self._nodes(x, t, hs, ls)
+        vin, vout, vload, vsw, iload, vci, vco, vbank, _ = self._nodes(x, t, hs, ls)
         il = x[0]
-        dil = 0.0 if (self.idle and not hs and not ls) else (vsw - il * p.dcr_ohm - vout) / p.l_at(il)
+        dil = 0.0 if (self.idle and not hs and not ls) else             (vsw - il * (p.dcr_ohm + p.r_sw_path) - vout) / p.l_at(il)
         disrc = (self.vin_fn(t) - x[1] * p.src_r_ohm - vin) / p.src_l_h if p.src_l_h > 0 else 0.0
         d = [dil, disrc]
         d += [b.g * (vin - v) / b.c_at(v) for b, v in zip(p.cin, vci)]
-        d += [b.g * (vout - v) / b.c_at(v) for b, v in zip(p.cout, vco)]
+        d += [b.g * (vbank - v) / b.c_at(v) for b, v in zip(p.cout, vco)]
         return d
 
     def _meas(self):
         hs, ls = self.c.hs, self.c.ls
-        vin, vout, vload, vsw, iload, _, _ = self._nodes(self.x, self.t, hs, ls)
-        sense = vload if self.p.sense_at_load else vout
+        vin, vout, vload, vsw, iload, _, _, _, vsense = self._nodes(self.x, self.t, hs, ls)
+        sense = vsense if self.p.sense_at_load else vout
         vfb = (sense + self.inj_fn(self.t)) * self.p.r_bot / (self.p.r_top + self.p.r_bot)
         return Meas(self.t, vin, vout, vload, vfb, self.x[0], bool(self.en_fn(self.t))), vsw, iload
 
@@ -671,8 +703,9 @@ def loop_gain(base: Sim, freqs, amplitude, *, settle_cycles: int = 12, measure_c
         w = s.run(t0 + t_settle + t_meas)
         m = w.window(t0 + t_settle)
         tt = w.t[m]
-        sense = w.vload[m] if s.p.sense_at_load else w.vout[m]
-        vy, vx = sense, sense + amp * np.sin(2 * math.pi * f * (tt - t0))
+        # x is the divider top (read back from V_fb), y the sense point it is fed from
+        vx = w.vfb[m] * (s.p.r_top + s.p.r_bot) / s.p.r_bot
+        vy = vx - amp * np.sin(2 * math.pi * f * (tt - t0))
         ph = np.exp(-2j * math.pi * f * (tt - t0))
         span = tt[-1] - tt[0]
         Y, X = 2 * np.trapezoid(vy * ph, tt) / span, 2 * np.trapezoid(vx * ph, tt) / span

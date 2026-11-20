@@ -32,8 +32,8 @@ from pathlib import Path
 
 import numpy as np
 
-from . import (copper, corners, cycle, emi, figures, inputfilter, layout, netlist, parts, report, stackup, stress,
-               thermal)
+from . import (copper, corners, cycle, emi, figures, inputfilter, layout, netlist, parasitics, parts, report,
+               stackup, stress, thermal)
 from .report import Param
 
 
@@ -688,6 +688,41 @@ def layout_calc(kind: str, params: dict) -> dict:
     if kind == "sheet_resistance":
         return {"ohm_per_square": layout.sheet_resistance(p["copper_mm"], p.get("temp_c", 25.0))}
     raise ValueError(f"unknown kind {kind!r}")
+
+
+def layout_parasitics(board: str, ic: str, ic_vin: str, ic_gnd: str, ic_sw: str, cin_refs: list,
+                      cout_refs: list, inductor: str, sense: list, load_vout: list, load_gnd: list,
+                      sense_gnd: list, source_vin: list | None = None, nets: dict | None = None,
+                      er: dict | float = 4.5, t_rise_s: float | None = None, pitch_mm: float = 0.1,
+                      stackup_json: str | None = None, out_json: str | None = None,
+                      figures_dir: str | None = None) -> dict:
+    """Lumped copper parasitics of a buck converter layout, for its simulations:
+    series R and L of the input path, hot loop, SW path, output path (from the
+    feedback junction to the load) and ground return; the switch-node copper C; and
+    the mounting inductance of each input and output capacitor (vias to the plane).
+    ``nets`` renames {VIN, GND, SW, VOUT}; ``er`` the dielectric (sourced or assumed).
+    ``out_json`` saves the network, which scripts load with
+    ``parasitics.Lumped.load`` and insert with ``apply_plant`` / ``apply_testbench``.
+    ``t_rise_s`` lists branches too long to lump for that edge. Graph: L and R per branch."""
+    b, st = _board(board, stackup_json)
+    er_p = _param(er, "", "er")
+    lp = parasitics.extract_buck(
+        b, ic=ic, ic_vin=str(ic_vin), ic_gnd=str(ic_gnd), ic_sw=str(ic_sw), cin_refs=[str(r) for r in cin_refs],
+        cout_refs=[str(r) for r in cout_refs], inductor=inductor, sense=tuple(map(str, sense)),
+        load_vout=tuple(map(str, load_vout)), load_gnd=tuple(map(str, load_gnd)),
+        sense_gnd=tuple(map(str, sense_gnd)), source_vin=tuple(map(str, source_vin)) if source_vin else None,
+        nets=nets, er=er_p.value, copper_pitch_mm=pitch_mm)
+    assumed = ([] if st else ["stackup (copper thickness, dielectric height)"]) + ([] if er_p.source else ["er"])
+    title = f"Lumped layout parasitics of {Path(board).name}"
+    out = {"lumped": {k: v for k, v in lp.to_dict().items() if k not in ("details", "unmodelled")},
+           "rows": lp.rows(), "unmodelled": lp.unmodelled, "assumptions": assumed,
+           "stackup_source": st.source if st else None, "details": json.loads(json.dumps(lp.details, default=str)),
+           "figures": [{"title": title, "path": lp.figure(_fig_path(figures_dir, "layout_parasitics"), title)}]}
+    if t_rise_s:
+        out["too_long_to_lump"] = lp.check_lumping(t_rise_s)
+    if out_json:
+        out["json"] = lp.save(out_json)
+    return out
 
 
 # ── design records: the user-approved specification and part selection ────

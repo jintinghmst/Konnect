@@ -18,6 +18,9 @@ and the measured value in the iteration record.
 | Set-point tolerance | constraint | None | Tighter-tolerance divider resistors |
 | Input capacitor RMS current | constraint | None | More input capacitors, higher ripple rating |
 | SW pin to inductor resistance | objective | Shorten and widen the SW track, but keep the SW copper area small (EMI); do not pour it | None |
+| Output-capacitor mounting inductance (ESL step in the ripple) | objective | Put the capacitor's GND via (two if room) at its pad, not after a track; keep VOUT and GND pads on the layer next to the plane | Lower-ESL package (0805 to 0603, reverse-geometry) or more capacitors in parallel |
+| Switch-node copper capacitance | objective | Shrink the SW copper; no plane pour under the SW pad beyond what the return needs | None |
+| Output-path inductance (load-step dip at the load) | objective | Shorten the junction-to-load track; keep it over the ground plane | Local capacitance at the load |
 
 ## Formulas for predicting a change
 
@@ -65,11 +68,19 @@ gain is at least 5 % and the new position fits (courtyards, outline). In the
 reference test the prediction for each change was within 5 % of the value
 extracted afterwards.
 
+- **Capacitor mounting:** the vias at each pad in parallel, L_via / n per terminal,
+  added to the part's ESL. The ESL step in the output ripple is
+  (ESL + L_mount) / N · Vin / L_ind for N capacitors in parallel.
+- **Switch-node copper:** C = ε0 εr A / h for pads and pours over the plane, plus
+  C' = √εeff / (c Z0) per length for tracks.
+
 ## What the extraction does not model
 
 | Item | Effect | What to do |
 |---|---|---|
-| Current through copper pours | A path through a pour reports "no track path"; 0 Ω is used | Route a track in parallel if the resistance matters, or treat the check as unmodelled |
+| Current through copper pours | Series paths through a pour report "no track path" and are listed in `unmodelled` (the ground return is solved through the fill) | Route a track in parallel if the resistance matters, or treat the check as unmodelled |
+| Mutual inductance between branches, current crowding | Lumped L is a closed-form estimate per branch | Bench measurement; field solver when available |
+| Branches longer than tr·c / (10 √εr,eff) | The lumped element misrepresents the edge | Distributed model; keep the check `INCOMPLETE` |
 | Plane cut-outs and fill clearance | The plane under a loop is taken from the zone outline | Inspect the fill; a slot under the loop invalidates the plane benefit |
 | Absolute switch-node peak | Set by the IC's switching speed and high-frequency losses | Vendor model or measurement with a short ground spring |
 | Radiated emissions | Not simulated | Minimise hot-loop area and SW copper as objectives; pre-compliance scan |

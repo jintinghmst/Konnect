@@ -20,7 +20,8 @@ Start with Konnect's `simulation` toolset (`load_toolset("simulation")`). Its
 `sim_board_thermal`, `sim_spice_run`, `sim_capacitor_check`,
 `sim_inductor_check`, `sim_input_network`, `sim_conducted_emissions`,
 `sim_corner_sweep`, `sim_evaluate_check`, `sim_write_report`,
-`sim_render_document`, `sim_cycle_record` and `sim_layout_calc`. The design
+`sim_render_document`, `sim_cycle_record`, `sim_layout_calc` and
+`sim_layout_parasitics`. The design
 records of `kicad-design-flow` (`sim_write_spec`, `sim_design_status`, ...) are
 in the separate `design` toolset. Pass every sourced input as
 `{"value": v, "source": "..."}`; a bare number is an assumption. Board tools
@@ -76,6 +77,7 @@ traceable to the design file or a cited document.
 | Regulation, loop stability, load and line steps, start-up, light load, faults | Closed-loop switched simulation with a controller model (`converter`, `scenarios`); the **vendor's model** where it runs in ngspice |
 | Switch-node and pin voltage stress | Edge-resolved SPICE run plus `stress` limits with durations |
 | Copper resistance, ground connectivity, current density, via current | Filled-copper solve (`copper`) |
+| The board's effect on any of the above, once a layout exists | Lumped parasitic network (`sim_layout_parasitics`, `parasitics`) inserted into the closed-loop and SPICE models (see "Layout parasitics") |
 | Inductor, capacitor, loss, efficiency and temperature | Manufacturer data through `parts`, `losses`, `thermal` |
 | Input-filter interaction, hot-plug, conducted EMI, SW-to-FB coupling | `inputfilter`, `emi` (pre-compliance estimates); Ott's common- and differential-mode envelopes as the second method |
 | PDN impedance against the target impedance | SPICE AC sweep with a 1 A source at the IC node |
@@ -209,11 +211,15 @@ check is incomplete, otherwise PASS.
   and build it with the package's `figures` module:
   - general charts: `metric_vs_x`, `waveform_grid`, `spectrum`, `bode`, `curves`,
     `cases`, `bars`, `board_map`;
-  - for a switching converter, save `converter.snapshot(w, period)` at every operating
-    point of the steady-state sweep (the whole window the check measured) and call
-    `figures.ripple_figures(..., period=period)`. This gives one summary of output, input
-    and inductor ripple versus load per input voltage, plus waveform grids of output
-    ripple, input ripple, inductor current and switch node. Every peak-to-peak value in
+  - for a switching converter, ripple is always graphed **against load current**, one
+    line per input voltage, never against input voltage alone. Sweep at least five loads
+    from light load to the maximum (e.g. 10, 25, 50, 75, 100 % of Iout,max) at minimum,
+    nominal and maximum input voltage. Save `converter.snapshot(w, period)` at every
+    operating point (the whole window the check measured) and call
+    `figures.ripple_figures(..., period=period)`. It draws output voltage ripple vs load
+    current against its limit, then input and inductor ripple vs load current, then
+    waveform grids of output ripple, input ripple, inductor current and switch node.
+    Attach the ripple-vs-current chart to the ripple check. Every peak-to-peak value in
     the figures is then the one the check reported.
 - Draw every spec limit as a labelled reference line. Mark a point the model cannot
   represent (pulse skipping, a missing model) as such; never draw it as a zero.
@@ -222,11 +228,56 @@ check is incomplete, otherwise PASS.
 
 ---
 
-## When the result depends on the layout
+## Layout parasitics (lumped model)
 
-To extract the board's parasitics into the simulation, and to iterate the layout
-until the checks meet their limits, use the `kicad-sim-optimize` skill. It
-reuses this skill's scripts and report rules.
+Once the board exists, every check that the copper can change is simulated with the
+board's parasitics, never with ideal wires: output accuracy at the load, ripple, load
+step, efficiency, switch-node and pin stress, input-network interaction. Schematic-only
+results are labelled "schematic only, no layout parasitics" in the report.
+
+1. Save the board with filled zones, then call `sim_layout_parasitics` (or
+   `parasitics.extract_buck` in a script) with the IC pins, the input and output
+   capacitors, the inductor, the feedback tap, the load and the input connector. Pass
+   `er` sourced from the fabricator stackup, `t_rise_s` = the switch's edge time, and
+   `out_json` = `iteration<N>/sim/results/parasitics.json`.
+2. It returns the network as lumped elements, each a series R and L except the
+   switch-node C:
+
+   | Element | Between | Enters the model as |
+   |---|---|---|
+   | Input path | input connector, hot-loop C_in | source R and L |
+   | Hot loop | C_in, IC VIN, IC GND, C_in | `L_hot`, `R_hot` (SPICE); `R_hot` added to the high side (closed loop) |
+   | SW path | IC SW, inductor | series R and L before the inductor; its R in the inductor branch |
+   | Switch node | SW copper to the ground plane | added to `C_sw` (SPICE ringing) |
+   | Output path | feedback junction, load VOUT pad | R and L between the regulated node and the load |
+   | Ground return | load GND, IC and divider GND | R and L in the load's return |
+   | C_in, C_out mounting | each capacitor's vias to the plane | added to the part's ESL |
+
+   Each element's L is the microstrip loop inductance where a ground plane lies under
+   the track (return included), otherwise the bar partial inductance (return counted
+   separately). Vias use 0.2 h (ln(4h/d) + 1) nH. The methods and their limits are in
+   the `parasitics` module docstring.
+3. In the script, load the network with `parasitics.Lumped.load(json)` and insert it:
+   `lumped.apply_plant(plant)` for `converter` (closed loop: regulation, ripple,
+   steps), `lumped.apply_testbench(tb)` for `buck.BuckTestbench` (switched SPICE and
+   `run_edge`; for steady-state SPICE runs pass `edges=False`, which leaves out only the
+   input loop's inductances, whose effect is the edge itself). The closed-loop model senses
+   at the feedback junction; the load sees the
+   output-path and ground-return drops, and the ripple includes the capacitors'
+   ESL plus mounting step, L (Vin / L_ind) at each edge.
+4. A lumped element is valid only while its branch is shorter than tr·c / (10 √εr,eff)
+   (about 16 mm for a 1 ns edge on FR-4). Branches in `too_long_to_lump` need a
+   distributed model: say so and keep their checks `INCOMPLETE`.
+5. In the report: the network table (`Lumped.markdown_table()`), its figure (series L
+   and R per branch, attached to every layout-dependent check), its `unmodelled` list,
+   and the assumptions (stackup, εr). A copper value that rests on an assumed stackup
+   keeps its checks `INCOMPLETE`.
+6. Run each layout-dependent check twice, without and with the network, and report
+   both values: the difference is what the layout costs, and the lever the
+   `kicad-sim-optimize` skill works on.
+
+To iterate the layout until the checks meet their limits, use the `kicad-sim-optimize`
+skill. It reuses this skill's scripts and report rules.
 
 ## Limits to state plainly
 
@@ -245,8 +296,11 @@ reuses this skill's scripts and report rules.
 - Ceramic capacitors lose capacitance under DC bias. Without the manufacturer's
   derating curve for the exact part number, bound the result (nominal and a
   stated derated value) and mark the dependent check `INCOMPLETE`.
-- Simulation verifies the circuit as modelled. Layout parasitics are excluded
-  unless extracted; say so in the report.
+- Simulation verifies the circuit as modelled. The lumped parasitic network covers
+  the power branches listed above, at the accuracy of closed-form inductance (no field
+  solver, no current crowding, mutual inductance between branches ignored). Before a
+  layout exists, or for anything the network lists as `unmodelled`, say so in the
+  report.
 
 ## Rules
 
@@ -258,3 +312,5 @@ reuses this skill's scripts and report rules.
 5. Validate every SPICE result against an independent estimate.
 6. Never report a simulation result without its graph; pass `figures_dir` to every
    `sim_*` tool.
+7. Once a board exists, simulate layout-dependent checks with its lumped parasitic
+   network (`sim_layout_parasitics`), never with ideal wires alone.

@@ -43,6 +43,7 @@ TOOLS = {
     "sim_render_document": (tools.render_document, False),
     "sim_cycle_record": (tools.cycle_record, False),
     "sim_layout_calc": (tools.layout_calc, True),
+    "sim_layout_parasitics": (tools.layout_parasitics, False),
     "sim_write_spec": (tools.write_spec, False),
     "sim_write_part_selection": (tools.write_part_selection, False),
     "sim_approve_record": (tools.approve_record, False),
