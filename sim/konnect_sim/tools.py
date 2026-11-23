@@ -726,6 +726,28 @@ def layout_parasitics(board: str, ic: str, ic_vin: str, ic_gnd: str, ic_sw: str,
     return out
 
 
+# ── standard verification suites ───────────────────────────────────────────
+
+def verify(project_dir: str, circuit: str = "buck", iteration: int | None = None,
+           write_template: bool = False) -> dict:
+    """Run the standard verification of a circuit class (``circuit``: "buck") on the
+    KiCad project: the same checks, operating points, solver settings and charts for
+    every design of that class, so two designs (or two runs) are directly comparable.
+    Reads iteration<N>/sim/inputs/<circuit>_design.json (every value {value, unit,
+    source}; null = unknown) with the schematic, the board and the accepted
+    specification, and writes iteration<N>/reports/<circuit>_verification.pdf (charts in
+    sim/figures, checks and SPICE grid as JSON in sim/results). A check that cannot be
+    completed stays in the report as INCOMPLETE with its chart slot and the reason.
+    ``write_template``: only write (or complete) the inputs file, pre-filled from the
+    schematic and the accepted specification, for the values to be sourced first.
+    Default iteration: the latest. A full buck run takes a few minutes."""
+    from . import suites
+    if write_template:
+        path = suites.template(project_dir, circuit, iteration)
+        return {"inputs": str(path), "next": "fill every null value with its source, then run without write_template"}
+    return suites.run(project_dir, circuit, iteration)
+
+
 # ── design records: the user-approved specification and part selection ────
 
 def write_spec(project_dir: str, title: str, requirements: list, brief: str = "", notes: list | None = None,

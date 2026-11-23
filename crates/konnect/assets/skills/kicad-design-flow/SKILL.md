@@ -138,7 +138,7 @@ continuing.
 |---|---|---|
 | 3. Schematic | `kicad-schematic` (parts exactly as accepted; any substitution goes back through stage 2) | ERC result and schematic PDF (`export_schematic_pdf`), plus schematic-level checks per `kicad-simulation` |
 | 4. Layout | `kicad-pcb`, then `kicad-sim-optimize` | DRC result, board renders, layout-dependent checks |
-| 5. Verification | `kicad-simulation` | Report in `iteration<N>/reports/`: one check per requirement ID, named `R-xx <category>` |
+| 5. Verification | `kicad-simulation` | Report in `iteration<N>/reports/`: one check per requirement ID, named `R-xx <category>`; a buck is verified by the standard suite (`sim_verify`), so every buck report has the same checks and charts |
 | 6. Manufacture | `kicad-manufacture` | Never order or upload without an explicit yes |
 
 ## Rules

@@ -792,6 +792,11 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         "r_gnd_ohm",
         "l_mount_cout_h",
         "carry_over",
+        "buck_verification",
+        "buck_design",
+        "peak_current",
+        "voltage_mode",
+        "fixed_output",
         "c_sw_f",
     ];
 

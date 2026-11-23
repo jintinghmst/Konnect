@@ -195,6 +195,22 @@ the mounting inductance of each input and output capacitor (vias to the plane).
             json!({"type": "object", "properties": {"board": {"type": "string"}, "ic": {"type": "string"}, "ic_vin": {"type": "string"}, "ic_gnd": {"type": "string"}, "ic_sw": {"type": "string"}, "cin_refs": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "cout_refs": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "inductor": {"type": "string"}, "sense": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad] of the feedback tap on VOUT"}, "load_vout": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "load_gnd": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad number]"}, "sense_gnd": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad] of the IC / divider ground"}, "source_vin": {"type": "array", "prefixItems": [{"type": "string"}, {"type": "string"}], "minItems": 2, "maxItems": 2, "description": "[reference, pad] of the input connector's VIN"}, "nets": {"type": "object", "additionalProperties": {"type": "string"}, "description": "{VIN, GND, SW, VOUT: board net name} when they differ"}, "er": {"anyOf": [{"type": "number"}, {"type": "object", "properties": {"value": {"type": "number"}, "source": {"type": "string"}, "unit": {"type": "string"}, "name": {"type": "string"}}, "required": ["value"]}], "default": 4.5}, "t_rise_s": {"type": "number"}, "pitch_mm": {"type": "number", "default": 0.1}, "stackup_json": {"type": "string"}, "out_json": {"type": "string"}, "figures_dir": {"type": "string"}}, "required": ["board", "ic", "ic_vin", "ic_gnd", "ic_sw", "cin_refs", "cout_refs", "inductor", "sense", "load_vout", "load_gnd", "sense_gnd"]}),
             |args, ctx| async move { handle_sim_layout_parasitics(args, ctx).await }
         ),
+        tool!(
+            "sim_verify",
+            r#"Run the standard verification of a circuit class (``circuit``: "buck") on the
+KiCad project: the same checks, operating points, solver settings and charts for
+every design of that class, so two designs (or two runs) are directly comparable.
+Reads iteration<N>/sim/inputs/<circuit>_design.json (every value {value, unit,
+source}; null = unknown) with the schematic, the board and the accepted
+specification, and writes iteration<N>/reports/<circuit>_verification.pdf (charts in
+sim/figures, checks and SPICE grid as JSON in sim/results). A check that cannot be
+completed stays in the report as INCOMPLETE with its chart slot and the reason.
+``write_template``: only write (or complete) the inputs file, pre-filled from the
+schematic and the accepted specification, for the values to be sourced first.
+Default iteration: the latest. A full buck run takes a few minutes."#,
+            json!({"type": "object", "properties": {"project_dir": {"type": "string"}, "circuit": {"enum": ["buck"], "default": "buck", "description": "circuit class with a standard suite"}, "iteration": {"type": "integer"}, "write_template": {"type": "boolean", "default": false}}, "required": ["project_dir"]}),
+            |args, ctx| async move { handle_sim_verify(args, ctx).await }
+        ),
     ]
 }
 
@@ -600,6 +616,15 @@ async fn handle_sim_layout_parasitics(
             "out_json",
             "figures_dir",
         ],
+    )
+    .await
+}
+
+async fn handle_sim_verify(args: &Value, _ctx: &ToolContext) -> anyhow::Result<CallToolResult> {
+    run_sim(
+        "sim_verify",
+        args,
+        &["project_dir", "circuit", "iteration", "write_template"],
     )
     .await
 }

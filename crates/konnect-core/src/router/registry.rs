@@ -148,9 +148,9 @@ pub static ALL_TOOLSETS: &[ToolsetMeta] = &[
     },
     ToolsetMeta {
         name: "simulation",
-        description: "Circuit-independent simulation of the saved design: copper flow, stackup, thermal, SPICE, part checks, input network, EMI, corners, evidence-rule reports and the optimise cycle",
+        description: "Circuit-independent simulation of the saved design: copper flow, stackup, thermal, SPICE, part checks, input network, EMI, corners, evidence-rule reports, the standard verification suites and the optimise cycle",
         category: "simulation",
-        tool_count: 18,
+        tool_count: 19,
     },
     ToolsetMeta {
         name: "design",

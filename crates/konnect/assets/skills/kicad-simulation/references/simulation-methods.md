@@ -34,9 +34,12 @@
 | budget | output-voltage window at the load: both limits, every contribution |
 | figures | report charts: ripple summary and waveform grids from `converter.snapshot`, metric vs sweep, spectrum vs limit, Bode; embedded through `Report(figures=...)` |
 | document | the report as PDF (default) or Word, text and figures together: `Report.write(..., documents=...)`, `sim_write_report`, `sim_render_document` |
+| suites | the standard verification per circuit class: `suites.buck` runs the fixed buck check list, grid, solver settings and charts (`sim_verify`); `template` writes its inputs file |
 | project | `Folders`: everything per iteration, `iteration<N>/sim/{scripts,inputs,results,figures,report_sources}` and `iteration<N>/reports` (PDF only); the cycle log in `design/records/cycle_log.json`; `carry_over()` starts a pass from the previous one's scripts and inputs |
 
 ## Coverage of a buck verification
+
+The standard buck suite (`sim_verify`) runs this coverage with fixed settings; the table says which module answers each item and what evidence it needs.
 
 | Item | Check | Module | PASS/FAIL needs |
 |---|---|---|---|

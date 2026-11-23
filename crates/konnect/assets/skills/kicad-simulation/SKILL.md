@@ -20,17 +20,18 @@ Start with Konnect's `simulation` toolset (`load_toolset("simulation")`). Its
 `sim_board_thermal`, `sim_spice_run`, `sim_capacitor_check`,
 `sim_inductor_check`, `sim_input_network`, `sim_conducted_emissions`,
 `sim_corner_sweep`, `sim_evaluate_check`, `sim_write_report`,
-`sim_render_document`, `sim_cycle_record`, `sim_layout_calc` and
-`sim_layout_parasitics`. The design
+`sim_render_document`, `sim_cycle_record`, `sim_layout_calc`,
+`sim_layout_parasitics` and `sim_verify`. The design
 records of `kicad-design-flow` (`sim_write_spec`, `sim_design_status`, ...) are
 in the separate `design` toolset. Pass every sourced input as
 `{"value": v, "source": "..."}`; a bare number is an assumption. Board tools
 read the saved board, so refill zones and save first.
 
-For topology-specific questions the toolset does not cover yet (the
-closed-loop buck converter, switch-node stress), the assistant writes a script
-on the `konnect_sim` Python package in the Konnect repository (`sim/`), which
-supplies the parts that must not be re-invented per script.
+A circuit class with a standard suite (a **buck converter**) is verified only by that
+suite, `sim_verify`: see "Standard verification suites" below. For other
+topology-specific questions the assistant writes a script on the `konnect_sim` Python
+package in the Konnect repository (`sim/`), which supplies the parts that must not be
+re-invented per script.
 
 Read [`references/simulation-methods.md`](references/simulation-methods.md)
 before choosing a method or writing a testbench, and
@@ -40,6 +41,55 @@ radiated emissions, crosstalk, filter attenuation or a pre-compliance plan
 (textbook relations with citations, mapped to the `sim_*` tools).
 
 ---
+
+## Standard verification suites
+
+Two verifications of the same kind of circuit must read the same way: the same checks
+in the same order, at the same operating points with the same solver settings, with the
+same charts. Only the design's values and how well they are sourced may differ. So a
+circuit class with a standard suite is never verified by an ad-hoc script.
+
+| Circuit | Suite | Run |
+|---|---|---|
+| Synchronous buck | `konnect_sim.suites.buck` | `sim_verify(project_dir, circuit="buck")` |
+
+For a buck:
+
+1. Write the inputs file: `sim_verify(project_dir, write_template=True)`. It writes
+   `iteration<N>/sim/inputs/buck_design.json`, pre-filled from the schematic (references,
+   pins, nets) and the accepted specification (limits). Check every guessed reference.
+2. Fill every null value you can source, as `{value, unit, source}`, from the datasheets
+   (IC: fsw, VFB min/typ/max, RDS(on), current limits, soft-start, absolute maximum
+   ratings, θJA; inductor: DCR, Isat, Irms, L(I); capacitors: ESR, ESL, DC-bias curve,
+   ratings). Set `ic.controller` (`peak_current`, `voltage_mode` or `cot`) and
+   `ic.fixed_output` for an IC with an internal divider. Leave unknown values null:
+   never invent a source.
+3. Run `sim_verify(project_dir)`. The report is
+   `iteration<N>/reports/buck_verification.pdf`.
+
+What the suite fixes, so do not change or work around it:
+
+- **Checks**, always all present in this order: R-01 Input range, R-02 Output accuracy,
+  R-03 Output ripple, R-04 Load transient, R-05 Startup, R-06 Loop stability,
+  R-07 Efficiency, R-08 Thermal, R-09 Short-circuit protection; Line transient and
+  Light-load behaviour exactly when the specification has them; then S-01 Switch-node
+  and pin stress, S-02 Inductor, S-03 Input capacitor RMS current, S-04 Input network,
+  S-05 Layout copper and parasitics, S-06 Model validation. Ids follow the
+  specification.
+- **Operating points**: Vin min/nom/max × 10, 25, 50, 75, 100 % of Iout,max (SPICE);
+  the closed-loop cases at fixed corners.
+- **Charts**: each check has the same chart titles every time. A check that cannot run
+  (a missing value, a failed simulation) stays in the report as INCOMPLETE with the
+  reason, and its charts are placeholders that say why.
+- **Evidence**: a missing value that only shapes a model falls back to the suite's fixed
+  default, listed in the report as assumed, so the checks using it stay INCOMPLETE.
+  Without a validated controller model (`ic.validated_by` empty), the closed-loop checks
+  run on a generic controller of the IC's type and stay INCOMPLETE.
+
+Questions the suite does not answer (e.g. conducted EMI) are added afterwards as separate
+`sim_*` checks in their own report; never as a replacement for a suite check, and never by
+editing the suite per design. For another circuit class, follow the workflow below; add
+a suite for it to the package when the class recurs.
 
 ## Workflow
 
@@ -217,15 +267,16 @@ check is incomplete, otherwise PASS.
   and build it with the package's `figures` module:
   - general charts: `metric_vs_x`, `waveform_grid`, `spectrum`, `bode`, `curves`,
     `cases`, `bars`, `board_map`;
-  - for a switching converter, ripple is always graphed **against load current**, one
-    line per input voltage, never against input voltage alone. Sweep at least five loads
-    from light load to the maximum (e.g. 10, 25, 50, 75, 100 % of Iout,max) at minimum,
-    nominal and maximum input voltage. Save `converter.snapshot(w, period)` at every
-    operating point (the whole window the check measured) and call
-    `figures.ripple_figures(..., period=period)`. It draws output voltage ripple vs load
-    current against its limit, then input and inductor ripple vs load current, then
-    waveform grids of output ripple, input ripple, inductor current and switch node.
-    Attach the ripple-vs-current chart to the ripple check. Every peak-to-peak value in
+  - for a switching converter, ripple is always graphed **against input voltage** (x),
+    with the ripple (inductor ripple current, output and input voltage ripple) on the
+    vertical axis and one line per load current. Sweep at least minimum, nominal and
+    maximum input voltage at light load through the maximum (e.g. 10, 25, 50, 75, 100 %
+    of Iout,max). Save `converter.snapshot(w, period)` at every operating point (the
+    whole window the check measured) and call `figures.ripple_figures(..., period=period)`.
+    It draws output voltage ripple vs input voltage against its limit, then input voltage
+    ripple and inductor ripple current vs input voltage, then waveform grids of output
+    ripple, input ripple, inductor current and switch node. Attach the ripple-vs-input-voltage
+    chart to the ripple check. Every peak-to-peak value in
     the figures is then the one the check reported.
 - Draw every spec limit as a labelled reference line. Mark a point the model cannot
   represent (pulse skipping, a missing model) as such; never draw it as a zero.
@@ -321,3 +372,5 @@ skill. It reuses this skill's scripts and report rules.
    `sim_*` tool.
 7. Once a board exists, simulate layout-dependent checks with its lumped parasitic
    network (`sim_layout_parasitics`), never with ideal wires alone.
+8. Verify a circuit class that has a standard suite (a buck) with `sim_verify` only:
+   never with a hand-written check list, operating grid or chart set.

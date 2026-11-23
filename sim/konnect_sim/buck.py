@@ -199,7 +199,11 @@ class BuckTestbench:
         # Cin starts charged to Vin.
         return "\n".join(l.replace("{VCAP}", str(self.vin)) for l in lines)
 
-    def run(self, d: float) -> dict:
+    def run(self, d: float, snap: bool = False) -> dict:
+        """Steady state at duty ``d`` over the last ``measure_cycles``. ``eff`` is P_load / P_source
+        from the switched model (conduction, body-diode and edge losses only). With ``snap`` the
+        result also holds ``snap``: rows (t, V at the IC VIN pin, V_load, I_L, V_SW) of the measured
+        window, the input ``figures.ripple_figures`` draws."""
         # A high-Q hot loop (L_hot with the input capacitors' ESL and mounting inductance)
         # can defeat ngspice's step control at particular values. The same circuit
         # integrated by another method is an equally valid solution, so retry with one.
@@ -225,7 +229,13 @@ class BuckTestbench:
         vload = res["vload"][w] - res["lgnd"][w]      # across the load
         def rms(x):
             return math.sqrt(np.trapezoid(x**2, tw) / (tw[-1] - tw[0]))
-        return {
+
+        def avg(x):
+            return float(np.trapezoid(x, tw) / (tw[-1] - tw[0]))
+        p_src = avg(res["src"][w] * (res["src"][w] - res["s1"][w]) / self.source_r_ohm)
+        p_load = avg(vload ** 2 / (self.vout_target / self.iout))
+        extra = {"snap": np.vstack([tw - tw[0], res["vic"][w], vload, il, res["sw"][w]])} if snap else {}
+        return extra | {
             "duty": d,
             "solver": options,
             "vout_avg": float(np.trapezoid(vout, tw) / (tw[-1] - tw[0])),
@@ -238,6 +248,9 @@ class BuckTestbench:
             "vload_avg": float(np.trapezoid(vload, tw) / (tw[-1] - tw[0])),
             "vload_pp": float(vload.max() - vload.min()),
             "vsw_max": float(res["sw"][w].max()),
+            "p_in_w": p_src,
+            "p_out_w": p_load,
+            "eff": p_load / p_src if p_src > 0 else float("nan"),
         }
 
     def ring_frequency_cf(self) -> float | None:
@@ -284,14 +297,14 @@ class BuckTestbench:
                 out["ring_hz"] = float((len(tc) - 1) / (2 * (tc[-1] - tc[0])))
         return out
 
-    def run_at_setpoint(self, iterations: int = 3) -> dict:
+    def run_at_setpoint(self, iterations: int = 3, snap: bool = False) -> dict:
         """Adjust duty so the average output equals ``vout_target`` (open loop),
         mimicking what the regulator's loop does in steady state."""
         d = self.vout_target / self.vin
         r = self.run(d)
-        for _ in range(iterations):
+        for k in range(iterations):
             d *= self.vout_target / r["vout_avg"]
-            r = self.run(d)
+            r = self.run(d, snap=snap and k == iterations - 1)
         return r
 
 

@@ -60,6 +60,12 @@ The project script runs one full evaluation and records it in the cycle log.
   1 is the baseline, and each change starts the next with
   `Folders.next(project).make().carry_over()`, which copies the scripts and inputs
   forward.
+- For a circuit class with a standard suite (a buck), the evaluation **is** the suite:
+  the script calls `konnect_sim.suites.run(project, "buck", iteration)` (the same checks,
+  grid and charts as `sim_verify`, so iterations compare like with like), records its
+  report JSON (`iteration<N>/sim/results/buck_verification.json`) in the cycle log, and
+  takes the objectives from `iteration<N>/sim/results/parasitics.json`. It never adds,
+  drops or re-parameterises suite checks between iterations. For other classes:
 - It reads the schematic through the package's netlist loader and the saved board
   through its layout loader, extracts the lumped parasitic network
   (`parasitics.extract_buck`, saved to `iteration<N>/sim/results/parasitics.json`),

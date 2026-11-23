@@ -1,8 +1,8 @@
 """Building blocks for simulations an AI assistant writes against KiCad designs.
 
-The assistant writes a short script per question ("does the buck meet its
-ripple spec?"); this package supplies the parts that must not be re-invented
-in every script:
+A circuit class with a standard suite (a buck) is verified by that suite, never by an
+ad-hoc script; for other questions the assistant writes a short script, and this package
+supplies the parts that must not be re-invented in every script:
 
 - ``spice``   : run ngspice through PySpice using KiCad's bundled ngspice.dll
 - ``netlist`` : read a KiCad schematic's components, values and nets
@@ -38,6 +38,9 @@ in every script:
                 figures, reports and design records
 - ``design``  : the specification and part selection, each a draft until the
                 user approves it
+- ``suites``  : the standard verification per circuit class (``suites.buck``): the
+                same checks, operating points, solver settings and charts for every
+                design of the class
 
 Every result that a report presents as evidence carries the method that
 produced it and the assumptions it rests on. A check whose inputs are assumed
@@ -46,5 +49,5 @@ rather than sourced is reported as INCOMPLETE, never PASS.
 
 __all__ = ["spice", "netlist", "units", "report", "buck", "parasitics", "layout", "cycle", "stackup", "copper",
            "parts", "losses", "thermal", "converter", "scenarios", "stress", "inputfilter", "emi",
-           "corners", "budget", "figures", "document", "project", "design"]
+           "corners", "budget", "figures", "document", "project", "design", "suites"]
 __version__ = "0.3.0"

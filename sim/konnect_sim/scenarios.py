@@ -7,6 +7,8 @@ stability condition dict, for factories that vary the plant), runs
 one scenario, and returns ``report.Check`` objects. The controller model's
 ``Common.validated_by`` decides the evidence level: with it empty the checks
 are INCOMPLETE ("controller model not validated"), whatever the margin.
+The time-domain scenarios take an optional ``waves`` dict and store each run's
+``converter.Waves`` in it (keyed by the case), so a caller can graph them.
 
 Scenarios:
 - ``regulation``: DC output across the line and load grid (item 3)
@@ -39,7 +41,8 @@ def _settle(sim, period, n=150):
 
 
 def regulation(make, vins: list[float], loads: list[float], *, v_target: Param, tol: Param,
-               period: float, inputs: dict) -> list:
+               period: float, inputs: dict, table: list | None = None) -> list:
+    """``table``, when given, receives (vin, load, V_load average) for every point."""
     rows, worst = [], 0.0
     sim = None
     for vin in vins:
@@ -51,6 +54,8 @@ def regulation(make, vins: list[float], loads: list[float], *, v_target: Param, 
             err = st["vload_avg"] / val(v_target) - 1
             rows.append((vin, i, st["vload_avg"]))
             worst = max(worst, abs(err))
+    if table is not None:
+        table.extend(rows)
     vals = [r[2] for r in rows]
     detail = f"{min(vals):.4f}-{max(vals):.4f} V over Vin {min(vins)}-{max(vins)} V, I {min(loads)}-{max(loads)} A"
     return [check("Closed-loop regulation (line and load)", f"within ±{val(tol):.1%} of {val(v_target):.3f} V",
@@ -106,7 +111,8 @@ def stability(make, conditions: list[dict], freqs, amplitude, *, pm_min: Param, 
 
 
 def load_step(make, vin: float, i0: float, i1: float, slew: Param, *, v_target: Param, max_dev: Param,
-              settle_band: Param, max_settle: Param, period: float, inputs: dict, t_after: float = 200e-6) -> list:
+              settle_band: Param, max_settle: Param, period: float, inputs: dict, t_after: float = 200e-6,
+              waves: dict | None = None) -> list:
     out = []
     for a, b, tag in ((i0, i1, "up"), (i1, i0, "down")):
         sim = make(vin, cv.Load.step(a, b, 0.0, val(slew)), v0=val(v_target), il0=a)
@@ -116,6 +122,8 @@ def load_step(make, vin: float, i0: float, i1: float, slew: Param, *, v_target: 
         t_ev = sim.t
         sim.load = cv.Load.step(a, b, t_ev, val(slew))
         w = sim.run(t_ev + t_after)
+        if waves is not None:
+            waves[tag] = (w, t_ev)
         tr = cv.transient(w, t_ev, None, val(settle_band) * val(v_target), period)
         dev_frac = max(abs(val(v_target) - tr["v_min"]), abs(tr["v_max"] - val(v_target))) / val(v_target)
         zeta = f", ζ≈{tr['zeta']:.2f}" if tr["zeta"] else ""
@@ -133,13 +141,15 @@ def load_step(make, vin: float, i0: float, i1: float, slew: Param, *, v_target: 
 
 def startup_shutdown(make, vin: float, *, r_full: float, v_target: Param, max_overshoot: Param,
                      max_inrush: Param, t_run: float, inputs: dict, t_off: float = 300e-6,
-                     record_every: int = 4) -> list:
+                     record_every: int = 4, waves: dict | None = None) -> list:
     out = []
     for label, load in (("no load", cv.Load.current(0.0)), ("full load", cv.Load.resistor(r_full))):
         t_restart = t_run + t_off
         en = lambda t, a=t_run, b=t_restart: not (a <= t < b)
         sim = make(vin, load, en=en, v0=0.0, il0=0.0)
         w = sim.run(t_restart + t_run, record_every=record_every)
+        if waves is not None:
+            waves[label] = (w, t_run, t_restart)
         m1 = w.window(0, t_run)
         # Monotonic means the output follows the soft-start ramp without dips.
         # Early in soft-start the converter pulse-skips and the output is a
@@ -203,7 +213,7 @@ def light_load(make, vin: float, loads: list[float], *, v_target: Param, tol: Pa
 
 def input_transients(make, *, v_nom: float, v_lo: float, v_hi: float, iout: float, v_target: Param,
                      max_dev: Param, slew_v_per_s: float, dip_to: float, dip_len: float, period: float,
-                     inputs: dict, uvlo_off: float | None = None) -> list:
+                     inputs: dict, uvlo_off: float | None = None, waves: dict | None = None) -> list:
     out = []
     miss = None
     for a, b in ((v_nom, v_hi), (v_hi, v_lo), (v_lo, v_nom)):
@@ -211,6 +221,8 @@ def input_transients(make, *, v_nom: float, v_lo: float, v_hi: float, iout: floa
         fn = cv.ramp(a, b, t_ev, t_ev + abs(b - a) / slew_v_per_s)
         sim = make(fn, cv.Load.current(iout), v0=val(v_target), il0=iout, v0_in=a)
         w = sim.run(t_ev + 250e-6)
+        if waves is not None:
+            waves[f"{a:g}->{b:g} V"] = (w, t_ev)
         tr = cv.transient(w, t_ev, val(v_target), 0.01 * val(v_target), period)
         dev = max(abs(tr["v_min"] - val(v_target)), abs(tr["v_max"] - val(v_target))) / val(v_target)
         miss = "" if sim.c.c.validated_by else "controller model not validated"
@@ -236,7 +248,8 @@ def input_transients(make, *, v_nom: float, v_lo: float, v_hi: float, iout: floa
 
 
 def faults(make, vin: float, *, i_overload: float, r_short: float, i_sat: Param, v_target: Param,
-           period: float, inputs: dict, t_fault: float = 1.5e-3, t_after: float = 3e-3) -> list:
+           period: float, inputs: dict, t_fault: float = 1.5e-3, t_after: float = 3e-3,
+           waves: dict | None = None) -> list:
     out = []
     miss = None
     for label, fault in (("overload", cv.Load.current(i_overload)), ("output short", cv.Load.resistor(r_short))):
@@ -248,6 +261,8 @@ def faults(make, vin: float, *, i_overload: float, r_short: float, i_sat: Param,
         i_pk = float(w1.il.max())
         sim.load = cv.Load.current(0.5)
         w2 = sim.run(sim.t + t_after, record_every=4)
+        if waves is not None:
+            waves[label] = (w1, w2, t_ev)
         m = w2.window(w2.t[-1] - 100e-6)
         rec = bool(abs(w2.vload[m].mean() / val(v_target) - 1) < 0.01)
         ev = [e[1] for e in w1.events if e[0] >= t_ev] + [e[1] for e in w2.events if e[0] > w1.t[-1]]

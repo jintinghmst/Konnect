@@ -123,6 +123,8 @@ OVERRIDES = {
         "nets": {"type": "object", "additionalProperties": {"type": "string"},
                  "description": "{VIN, GND, SW, VOUT: board net name} when they differ"},
         "er": NUM_OR_SOURCED},
+    "sim_verify": {"circuit": {"enum": ["buck"], "default": "buck",
+                               "description": "circuit class with a standard suite"}},
     "sim_layout_calc": {"kind": {"enum": ["microstrip", "via_inductance", "via_resistance", "ipc2221_width",
                                           "ipc2221_current", "skin_resistance", "loop_inductance",
                                           "sheet_resistance"]},

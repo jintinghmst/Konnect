@@ -21,7 +21,7 @@ FIXTURE = SIM.parent / "crates/konnect-sexp/tests/fixtures/pic_programmer.kicad_
 
 def test_catalog_lists_every_tool_with_a_schema():
     cat = cli.catalog()
-    assert len(cat) == len(cli.TOOLS) == 22
+    assert len(cat) == len(cli.TOOLS) == 23
     for t in cat:
         assert t["name"].startswith("sim_") and t["description"]
         sch = t["input_schema"]
@@ -119,7 +119,8 @@ def test_report_embeds_figures_relative_to_the_report(tmp_path):
     snaps = {"24V_5A": snap, "24V_0A": idle}
     figs = figures.ripple_figures(tmp_path / "figs", snaps, [24.0], [0.0, 5.0], vout_pp_max=0.03,
                                   vin_pp_max=0.5, il_pp_target=1.5)
-    assert [t for t, _ in figs][:2] == ["Output ripple vs load current", "Input and inductor ripple vs load current"]
+    assert [t for t, _ in figs][:2] == ["Output ripple vs input voltage",
+                                         "Input voltage and inductor current ripple vs input voltage"]
     assert all(Path(p).stat().st_size > 1000 for _, p in figs)
     c1 = tools.evaluate_check("a", "<= 1", 0.5, 1.0, "max", "m", {"x": {"value": 1, "source": "s"}})
     rep = tools.write_report("t", "d", [c1], str(tmp_path), "r", documents=["md"],
@@ -130,7 +131,7 @@ def test_report_embeds_figures_relative_to_the_report(tmp_path):
     js = json.loads(Path(rep["json"]).read_text())
     assert Path(rep["json"]).parent == tmp_path / "r_data"              # data kept out of the report's folder
     assert js["summary_figure"] == str((tmp_path / "r_figures/r_checks_vs_limits.png").resolve())
-    assert js["figures"][0]["path"] == str((tmp_path / "figs/fig_ripple_vs_load.png").resolve())
+    assert js["figures"][0]["path"] == str((tmp_path / "figs/fig_ripple_vs_vin.png").resolve())
     with pytest.raises(ValueError):
         tools.write_report("t", "d", [c1], str(tmp_path), "r2", figures=[{"title": "x", "path": "nope.png"}])
 
@@ -147,7 +148,7 @@ def test_ripple_figures_report_the_checked_window_not_the_drawn_cycles(tmp_path,
     monkeypatch.setattr(figures, "waveform_grid", lambda path, get, **kw: seen.setdefault(Path(path).name, get) and str(path))
     figures.ripple_figures(tmp_path, {"24V_5A": snap}, [24.0], [5.0], period=period, draw_cycles=3)
     full = float(np.ptp(vout))
-    assert seen["p"][0]["series"]["Vin 24 V"][0] == pytest.approx(full * 1e3)
+    assert seen["p"][0]["series"]["5 A"][0] == pytest.approx(full * 1e3)
     t_drawn, _, pp = seen["fig_ripple_vout.png"](24.0, 5.0)
     assert pp == pytest.approx(full) and t_drawn[-1] - t_drawn[0] == pytest.approx(3 * period, rel=0.01)
 
@@ -241,7 +242,7 @@ def _bridge(*args, stdin=""):
 
 def test_bridge_protocol_as_konnect_calls_it():
     code, cat = _bridge("--catalog")
-    assert code == 0 and len(cat) == 22
+    assert code == 0 and len(cat) == 23
     code, out = _bridge("sim_layout_calc", stdin=json.dumps({"kind": "via_inductance",
                                                                "params": {"h_mm": 1.6, "d_mm": 0.4}}))
     assert code == 0 and out["ok"] and out["result"]["henry"] * 1e9 == pytest.approx(1.207, abs=0.01)

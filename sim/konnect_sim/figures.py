@@ -7,7 +7,7 @@ the reference palette (validated all-pairs for up to three series) with a
 distinct marker per series and a direct label, so identity never rests on
 colour alone. Spec limits are dashed red reference lines with their label.
 
-- ``metric_vs_x``    one panel per metric (e.g. ripple vs load, one line per Vin)
+- ``metric_vs_x``    one panel per metric (e.g. ripple vs input voltage, one line per load)
 - ``waveform_grid``  small multiples of time waveforms over a 2-D sweep
 - ``spectrum``       harmonic levels against a limit line (conducted emissions)
 - ``bode``           loop-gain magnitude and phase from ``converter.loop_gain``
@@ -20,6 +20,8 @@ colour alone. Spec limits are dashed red reference lines with their label.
 - ``cases``          a metric's value at every tolerance case, nominal and worst marked
 - ``bars``           one bar per item (e.g. coupled track runs)
 - ``board_map``      a per-cell board quantity (current density, copper groups) per layer
+- ``window``         output-voltage window at the load: each limit and the stack-up to it
+- ``placeholder``    a chart slot that could not be drawn, with the reason (fixed chart sets)
 """
 from __future__ import annotations
 
@@ -62,6 +64,17 @@ def limit_line(ax, y: float, text: str, *, x: float = 0.0, below: bool = False):
                 textcoords="offset points", color=CRITICAL, va="top" if below else "bottom", fontsize=8)
 
 
+def _styles(n: int) -> list[tuple[str, str]]:
+    """Colour and marker for ``n`` series: the categorical set up to its size, beyond that an
+    ordered ramp (the series are then steps of one quantity, such as load current)."""
+    if n <= len(SERIES):
+        return SERIES[:n]
+    import matplotlib
+    ramp = matplotlib.colormaps["viridis"]
+    marks = [mk for _, mk in SERIES]
+    return [(matplotlib.colors.to_hex(ramp(0.9 * k / (n - 1))), marks[k % len(marks)]) for k in range(n)]
+
+
 def _direct_labels(ax, x_end, ends, span):
     """End-of-line labels nudged apart (min gap 6 % of the axis span)."""
     placed = []
@@ -76,18 +89,24 @@ def metric_vs_x(path, x, panels: list[dict], *, xlabel: str, title: str = "", no
                 panel_width: float = 3.9) -> str:
     """One panel per metric, the metric on y against ``x``. ``panels``: [{"title", "ylabel",
     "series": {label: ys}, "limit": y | None,
-    "limit_label": str, "limit_below": bool, "limit_x": 0..1, "ymax": float | None}]."""
+    "limit_label": str, "limit_below": bool, "limit_x": 0..1, "ymax": float | None, "ymin": float (0),
+    "legend_title": str}]. Up to four series are labelled at their line ends; more get a
+    legend beside the panel, since lines that coincide would otherwise share one label spot."""
     plt = _plt()
     fig, axs = plt.subplots(1, len(panels), figsize=(panel_width * len(panels), 3.8), squeeze=False)
     for ax, p in zip(axs[0], panels):
-        for (lab, ys), (c, mk) in zip(p["series"].items(), SERIES):
+        for (lab, ys), (c, mk) in zip(p["series"].items(), _styles(len(p["series"]))):
             ax.plot(x, ys, color=c, marker=mk, label=lab)
         top = p.get("ymax") or max(max(max(ys) for ys in p["series"].values()), p.get("limit") or 0) * 1.1
-        ax.set_ylim(0, top)
+        ax.set_ylim(p.get("ymin", 0), top)
         if p.get("limit") is not None:
             limit_line(ax, p["limit"], p.get("limit_label", "limit"), x=p.get("limit_x", 0.0),
                        below=p.get("limit_below", False))
-        _direct_labels(ax, x[-1], [(ys[-1], lab) for lab, ys in p["series"].items()], top)
+        if len(p["series"]) <= len(SERIES):
+            _direct_labels(ax, x[-1], [(ys[-1], lab) for lab, ys in p["series"].items()], top)
+        else:
+            ax.legend(title=p.get("legend_title"), fontsize=7, title_fontsize=7.5, loc="upper left",
+                      bbox_to_anchor=(1.01, 1.0))
         ax.set_title(p["title"]); ax.set_xlabel(xlabel); ax.set_ylabel(p.get("ylabel", ""))
     if title:
         fig.suptitle(title, color=INK)
@@ -191,10 +210,10 @@ def ripple_figures(out_dir, snaps: dict, vins: list[float], loads: list[float], 
                    key=lambda vin, i: f"{vin:g}V_{i:g}A") -> list[tuple[str, str]]:
     """The standard ripple set for a switching converter, from ``converter.snapshot`` arrays
     (rows t, vin, vload, il, vsw) keyed by ``key(vin, load)``. Limits in volts / amperes.
-    Returns [(title, path)] for ``Report.figures``: output voltage ripple vs load current
-    (one line per input voltage, against its limit), input and inductor ripple vs load
-    current, then waveform grids. Sweep at least five loads from light load to the maximum
-    so the ripple-vs-current curves have a shape.
+    Returns [(title, path)] for ``Report.figures``: output voltage ripple vs input voltage
+    (one line per load current, against its limit), input voltage ripple and inductor ripple
+    current vs input voltage, then waveform grids. Sweep at least the minimum, nominal and
+    maximum input voltage so the curves have a shape.
 
     Every peak-to-peak value is taken over the whole snapshot, the window the checks measure;
     with ``period`` the waveform grids draw only its last ``draw_cycles`` switching periods.
@@ -216,27 +235,28 @@ def ripple_figures(out_dir, snaps: dict, vins: list[float], loads: list[float], 
     figs = []
     if live:
         def ser(row, scale):
-            return {f"Vin {v:g} V": [get(v, i, row)[2] * scale for i in live] for v in vins}
+            return {f"{i:g} A": [get(v, i, row)[2] * scale for v in vins] for i in live}
         skipped = [i for i in loads if i not in live]
         note = "; ".join(f"{i:g} A not plotted: " + not_modelled.get(i, "no switching cycle in the window")
                          for i in skipped)
         vout = {"title": "Output voltage ripple (mVpp)", "ylabel": "output ripple (mVpp)",
                 "series": ser(2, 1e3), "limit": vout_pp_max * 1e3 if vout_pp_max else None,
-                "limit_label": f"limit {vout_pp_max * 1e3:g} mVpp" if vout_pp_max else ""}
-        figs.append(("Output ripple vs load current",
-                     metric_vs_x(out / "fig_ripple_vs_load.png", live, [vout], xlabel="load current (A)", note=note,
-                                 title="Output voltage ripple vs load current, one line per input voltage",
+                "limit_label": f"limit {vout_pp_max * 1e3:g} mVpp" if vout_pp_max else "", "legend_title": "load current"}
+        figs.append(("Output ripple vs input voltage",
+                     metric_vs_x(out / "fig_ripple_vs_vin.png", vins, [vout], xlabel="input voltage (V)", note=note,
+                                 title="Output voltage ripple vs input voltage, one line per load current",
                                  panel_width=6.5)))
         panels = [{"title": "Input ripple at the IC (mVpp)", "ylabel": "input ripple (mVpp)",
                    "series": ser(1, 1e3),
                    "limit": vin_pp_max * 1e3 if vin_pp_max else None,
-                   "limit_label": f"limit {vin_pp_max * 1e3:g} mVpp" if vin_pp_max else ""},
+                   "limit_label": f"limit {vin_pp_max * 1e3:g} mVpp" if vin_pp_max else "", "legend_title": "load current"},
                   {"title": "Inductor current ripple (App)", "ylabel": "inductor ripple current (App)",
                    "series": ser(3, 1.0), "limit": il_pp_target,
-                   "limit_label": f"target {il_pp_target:g} App" if il_pp_target else ""}]
-        figs.append(("Input and inductor ripple vs load current",
-                     metric_vs_x(out / "fig_ripple_summary.png", live, panels, xlabel="load current (A)", note=note,
-                                 title="Input and inductor ripple vs load current", panel_width=4.5)))
+                   "limit_label": f"target {il_pp_target:g} App" if il_pp_target else "", "legend_title": "load current"}]
+        figs.append(("Input voltage and inductor current ripple vs input voltage",
+                     metric_vs_x(out / "fig_ripple_summary.png", vins, panels, xlabel="input voltage (V)", note=note,
+                                 title="Input voltage ripple and inductor ripple current vs input voltage, "
+                                       "one line per load current", panel_width=4.5)))
     empty = "\n".join(sorted(set(not_modelled.values()))) or "pulse skipping:\nno switching cycle\nin the window"
     common = dict(rows=vins, cols=loads, row_label=lambda v: f"Vin {v:g} V", col_label=lambda i: f"{i:g} A",
                   empty_text=empty)
@@ -409,4 +429,56 @@ def board_map(path, layers: dict, extent: tuple, *, title: str, label: str, mark
     if not categorical and im is not None:
         fig.colorbar(im, ax=axs[0].tolist(), label=label, shrink=0.85)
     fig.suptitle(title + (f"  ({label})" if categorical else ""), color=INK)
+    return _save(fig, path)
+
+
+def window(path, v_nom: float, lo: float, hi: float, lo_limit: float | None, hi_limit: float | None, *,
+           title: str, terms_lo: list[tuple[str, float]] = (), terms_hi: list[tuple[str, float]] = ()) -> str:
+    """The output voltage at the load as a band from ``lo`` to ``hi`` around ``v_nom`` with both
+    limits, and the contributions (V) that build each end."""
+    plt = _plt()
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(9.0, 3.6), gridspec_kw={"width_ratios": [1, 1.4]})
+    ax.bar([0], [hi - lo], bottom=[lo], width=0.5, color=SERIES[0][0], alpha=0.8)
+    ax.axhline(v_nom, color=INK2, lw=1.0, ls=":")
+    # limit labels outside the band (below the lower, above the upper), values inside it
+    for y, lab, dy, va in ((lo_limit, "lower limit", -3, "top"), (hi_limit, "upper limit", 3, "bottom")):
+        if y is not None:
+            ax.axhline(y, color=CRITICAL, lw=1.2, ls="--")
+            ax.annotate(f"{lab} {y:.3f} V", xy=(1, y), xycoords=("axes fraction", "data"), xytext=(-4, dy),
+                        textcoords="offset points", ha="right", va=va, color=CRITICAL, fontsize=8)
+    for y, lab, dy, va in ((lo, f"min {lo:.3f} V", 3, "bottom"), (hi, f"max {hi:.3f} V", -3, "top")):
+        ax.annotate(lab, xy=(0.25, y), xytext=(6, dy), textcoords="offset points", va=va, fontsize=8,
+                    color=INK2)
+    span = max([hi, hi_limit or hi]) - min([lo, lo_limit or lo])
+    ax.set_ylim(min([lo, lo_limit or lo]) - 0.3 * span, max([hi, hi_limit or hi]) + 0.3 * span)
+    ax.set_xticks([]); ax.set_xlim(-0.6, 1.2); ax.set_ylabel("V at the load")
+    ax.set_title("window")
+    labels = [f"− {n}" for n, _ in terms_lo] + [f"+ {n}" for n, _ in terms_hi]
+    vals = [v * 1e3 for _, v in terms_lo] + [v * 1e3 for _, v in terms_hi]
+    if labels:
+        bx.barh(range(len(labels)), vals, color=[SERIES[1][0]] * len(terms_lo) + [SERIES[2][0]] * len(terms_hi),
+                height=0.6)
+        bx.set_yticks(range(len(labels)), labels, fontsize=8)
+        bx.invert_yaxis()
+        for i, v in enumerate(vals):
+            bx.annotate(f"{v:.1f} mV", xy=(v, i), xytext=(4, 0), textcoords="offset points", va="center",
+                        fontsize=7.5, color=INK2)
+    bx.set_xlabel("contribution (mV)"); bx.set_title("stack-up (− lowers the minimum, + raises the maximum)",
+                                                     fontsize=9)
+    bx.grid(axis="y", visible=False)
+    fig.suptitle(title, color=INK)
+    fig.tight_layout()
+    return _save(fig, path)
+
+
+def placeholder(path, title: str, reason: str) -> str:
+    """A chart slot that could not be drawn: the title and why, so a fixed chart set keeps its shape."""
+    import textwrap
+    plt = _plt()
+    fig, ax = plt.subplots(figsize=(6.5, 2.4))
+    ax.axis("off")
+    ax.text(0.5, 0.62, title, ha="center", va="center", fontsize=11, color=INK, transform=ax.transAxes)
+    ax.text(0.5, 0.32, "not simulated: " + textwrap.fill(reason, 80), ha="center", va="center", fontsize=8.5,
+            color=MUTED, transform=ax.transAxes)
+    fig.tight_layout()
     return _save(fig, path)
