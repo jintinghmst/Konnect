@@ -202,8 +202,8 @@ class BuckTestbench:
     def run(self, d: float, snap: bool = False) -> dict:
         """Steady state at duty ``d`` over the last ``measure_cycles``. ``eff`` is P_load / P_source
         from the switched model (conduction, body-diode and edge losses only). With ``snap`` the
-        result also holds ``snap``: rows (t, V at the IC VIN pin, V_load, I_L, V_SW) of the measured
-        window, the input ``figures.ripple_figures`` draws."""
+        result also holds ``snap``: rows (t, V at the IC VIN pin, V_load, I_L, V_SW, I_Cin) of the
+        measured window, the input ``figures.ripple_figures`` draws."""
         # A high-Q hot loop (L_hot with the input capacitors' ESL and mounting inductance)
         # can defeat ngspice's step control at particular values. The same circuit
         # integrated by another method is an equally valid solution, so retry with one.
@@ -234,7 +234,7 @@ class BuckTestbench:
             return float(np.trapezoid(x, tw) / (tw[-1] - tw[0]))
         p_src = avg(res["src"][w] * (res["src"][w] - res["s1"][w]) / self.source_r_ohm)
         p_load = avg(vload ** 2 / (self.vout_target / self.iout))
-        extra = {"snap": np.vstack([tw - tw[0], res["vic"][w], vload, il, res["sw"][w]])} if snap else {}
+        extra = {"snap": np.vstack([tw - tw[0], res["vic"][w], vload, il, res["sw"][w], icin])} if snap else {}
         return extra | {
             "duty": d,
             "solver": options,

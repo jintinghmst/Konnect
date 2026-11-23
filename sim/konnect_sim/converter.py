@@ -618,12 +618,17 @@ class Sim:
 # ── analysis ───────────────────────────────────────────────────────────────
 
 def snapshot(w: Waves, period: float, cycles: int | None = None) -> np.ndarray:
-    """A steady run as rows (t, vin, vload, il, vsw), time from zero: the input
+    """A steady run as rows (t, vin, vload, il, vsw, icin), time from zero: the input
     ``figures.ripple_figures`` draws. Keep the whole window that ``steady`` measured (the
-    default) so the figures report the same peak-to-peak as the check; ``cycles`` keeps only
-    the last few switching periods."""
+    default) so the figures report the same values as the check; ``cycles`` keeps only
+    the last few switching periods.
+
+    icin, the current into the input capacitors, is the source current less what the high
+    side draws from the VIN node: the inductor current whenever SW sits at the VIN rail (the
+    high side on, or its body diode carrying reverse current), as ``Sim._nodes`` solves it."""
     m = w.t >= (w.t[-1] - cycles * period if cycles else w.t[0])
-    return np.vstack([w.t[m] - w.t[m][0], w.vin[m], w.vload[m], w.il[m], w.vsw[m]])
+    icin = w.isrc - np.where(w.vsw > w.vin / 2, w.il, 0.0)
+    return np.vstack([w.t[m] - w.t[m][0], w.vin[m], w.vload[m], w.il[m], w.vsw[m], icin[m]])
 
 
 def cycle_average(w: Waves, x: np.ndarray, period: float) -> np.ndarray:

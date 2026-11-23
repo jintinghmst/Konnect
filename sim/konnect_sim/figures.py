@@ -206,17 +206,21 @@ def bode(path, curves: list[tuple[str, dict, list]], *, title: str, pm_min: floa
 
 def ripple_figures(out_dir, snaps: dict, vins: list[float], loads: list[float], *, vout_pp_max: float | None = None,
                    vin_pp_max: float | None = None, il_pp_target: float | None = None,
+                   icin_rms_max: float | None = None, il_peak_max: float | None = None,
                    not_modelled: dict | None = None, period: float | None = None, draw_cycles: int = 3,
                    key=lambda vin, i: f"{vin:g}V_{i:g}A") -> list[tuple[str, str]]:
     """The standard ripple set for a switching converter, from ``converter.snapshot`` arrays
-    (rows t, vin, vload, il, vsw) keyed by ``key(vin, load)``. Limits in volts / amperes.
-    Returns [(title, path)] for ``Report.figures``: output voltage ripple vs input voltage
-    (one line per load current, against its limit), input voltage ripple and inductor ripple
-    current vs input voltage, then waveform grids. Sweep at least the minimum, nominal and
-    maximum input voltage so the curves have a shape.
+    (rows t, vin, vload, il, vsw and, when the model provides it, icin: the input-capacitor
+    current) keyed by ``key(vin, load)``. Limits in volts / amperes.
+    Returns [(title, path)] for ``Report.figures``. The trends against input voltage are
+    currents, one line per load current: inductor ripple current (against ``il_pp_target``),
+    then input-capacitor RMS current (against ``icin_rms_max``; only when every snapshot
+    carries icin) beside inductor peak current (against ``il_peak_max``). Then the waveform
+    grids against time, where ``vout_pp_max`` and ``vin_pp_max`` draw the allowed band.
+    Sweep at least the minimum, nominal and maximum input voltage so the curves have a shape.
 
-    Every peak-to-peak value is taken over the whole snapshot, the window the checks measure;
-    with ``period`` the waveform grids draw only its last ``draw_cycles`` switching periods.
+    Every value is taken over the whole snapshot, the window the checks measure; with
+    ``period`` the waveform grids draw only its last ``draw_cycles`` switching periods.
 
     A point is drawn as text, never as a zero, when the switch never toggled in the window
     or when ``not_modelled`` names its load ({load: reason}, e.g. {0.0: "PFM bursts not
@@ -224,39 +228,48 @@ def ripple_figures(out_dir, snaps: dict, vins: list[float], loads: list[float], 
     out = Path(out_dir)
     not_modelled = not_modelled or {}
 
-    def get(vin, i, row):
+    def rms(x):
+        return float(np.sqrt(np.mean(np.square(x))))
+
+    def get(vin, i, row, metric=np.ptp):
         s = snaps.get(key(vin, i))
-        if s is None or i in not_modelled or np.ptp(s[4]) < 1.0:
+        if s is None or i in not_modelled or np.ptp(s[4]) < 1.0 or row >= len(s):
             return None
         m = s[0] >= s[0][-1] - draw_cycles * period if period else slice(None)
-        return s[0][m], s[row][m], float(np.ptp(s[row]))
+        return s[0][m], s[row][m], float(metric(s[row]))
 
-    live = [i for i in loads if all(get(v, i, 2) is not None for v in vins)]
+    live = [i for i in loads if all(get(v, i, 3) is not None for v in vins)]
     figs = []
     if live:
-        def ser(row, scale):
-            return {f"{i:g} A": [get(v, i, row)[2] * scale for v in vins] for i in live}
+        def ser(row, metric=np.ptp):
+            return {f"{i:g} A": [get(v, i, row, metric)[2] for v in vins] for i in live}
+
+        def panel(title, ylabel, series, limit, limit_label):
+            return {"title": title, "ylabel": ylabel, "series": series, "limit": limit,
+                    "limit_label": limit_label if limit is not None else "", "legend_title": "load current"}
         skipped = [i for i in loads if i not in live]
         note = "; ".join(f"{i:g} A not plotted: " + not_modelled.get(i, "no switching cycle in the window")
                          for i in skipped)
-        vout = {"title": "Output voltage ripple (mVpp)", "ylabel": "output ripple (mVpp)",
-                "series": ser(2, 1e3), "limit": vout_pp_max * 1e3 if vout_pp_max else None,
-                "limit_label": f"limit {vout_pp_max * 1e3:g} mVpp" if vout_pp_max else "", "legend_title": "load current"}
-        figs.append(("Output ripple vs input voltage",
-                     metric_vs_x(out / "fig_ripple_vs_vin.png", vins, [vout], xlabel="input voltage (V)", note=note,
-                                 title="Output voltage ripple vs input voltage, one line per load current",
+        ripple = panel("Inductor ripple current (App)", "inductor ripple current (App)", ser(3), il_pp_target,
+                       f"target {il_pp_target:g} App" if il_pp_target else "")
+        figs.append(("Inductor ripple current vs input voltage",
+                     metric_vs_x(out / "fig_ripple_vs_vin.png", vins, [ripple], xlabel="input voltage (V)", note=note,
+                                 title="Inductor ripple current vs input voltage, one line per load current",
                                  panel_width=6.5)))
-        panels = [{"title": "Input ripple at the IC (mVpp)", "ylabel": "input ripple (mVpp)",
-                   "series": ser(1, 1e3),
-                   "limit": vin_pp_max * 1e3 if vin_pp_max else None,
-                   "limit_label": f"limit {vin_pp_max * 1e3:g} mVpp" if vin_pp_max else "", "legend_title": "load current"},
-                  {"title": "Inductor current ripple (App)", "ylabel": "inductor ripple current (App)",
-                   "series": ser(3, 1.0), "limit": il_pp_target,
-                   "limit_label": f"target {il_pp_target:g} App" if il_pp_target else "", "legend_title": "load current"}]
-        figs.append(("Input voltage and inductor current ripple vs input voltage",
-                     metric_vs_x(out / "fig_ripple_summary.png", vins, panels, xlabel="input voltage (V)", note=note,
-                                 title="Input voltage ripple and inductor ripple current vs input voltage, "
-                                       "one line per load current", panel_width=4.5)))
+        peak = panel("Inductor peak current (A)", "inductor peak current (A)", ser(3, np.max), il_peak_max,
+                     f"limit {il_peak_max:g} A" if il_peak_max else "")
+        if all(get(v, i, 5) is not None for v in vins for i in live):
+            icin = panel("Input capacitor current (A RMS)", "input capacitor current (A RMS)", ser(5, rms),
+                         icin_rms_max, f"limit {icin_rms_max:g} A RMS" if icin_rms_max else "")
+            figs.append(("Input capacitor RMS current and inductor peak current vs input voltage",
+                         metric_vs_x(out / "fig_ripple_summary.png", vins, [icin, peak], xlabel="input voltage (V)",
+                                     note=note, title="Input capacitor RMS current and inductor peak current vs "
+                                                      "input voltage, one line per load current", panel_width=4.5)))
+        else:
+            figs.append(("Inductor peak current vs input voltage",
+                         metric_vs_x(out / "fig_ripple_summary.png", vins, [peak], xlabel="input voltage (V)",
+                                     note=note, title="Inductor peak current vs input voltage, one line per load "
+                                                      "current", panel_width=6.5)))
     empty = "\n".join(sorted(set(not_modelled.values()))) or "pulse skipping:\nno switching cycle\nin the window"
     common = dict(rows=vins, cols=loads, row_label=lambda v: f"Vin {v:g} V", col_label=lambda i: f"{i:g} A",
                   empty_text=empty)
