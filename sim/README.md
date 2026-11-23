@@ -35,7 +35,7 @@ package for the parts that must be reliable every time.
 | `budget` | Output-voltage window at the load, both limits, every contribution |
 | `figures` | Report charts: every checked quantity against its limit (ripple summary and waveform grids, spectrum, Bode) |
 | `document` | Render a Markdown report as PDF (reportlab) or Word (python-docx), text and figures together |
-| `project` | `Folders`: a project's `sim/scripts`, `sim/inputs`, `sim/results/<run>`, `sim/figures/<run>` and `reports/` |
+| `project` | `Folders`: per iteration, `iteration<N>/sim/{scripts,inputs,results,figures,report_sources}` and `iteration<N>/reports`; no project-level `sim/` or `reports/` |
 
 Every model input is a `report.Param` carrying its source; `report.check`
 derives the status from the inputs' provenance, so an assumed value or an

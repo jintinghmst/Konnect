@@ -24,7 +24,7 @@ in the KiCad project folder:
 |---|---|
 | `design/01_specification.pdf` | 1. Specification |
 | `design/02_part_selection.pdf` | 2. Part selection |
-| `sim/` (scripts), `iteration<N>/` (each pass: `sim/results`, `sim/figures`, `reports`), `reports/` (final) | 5. Verification (`kicad-simulation`) |
+| `iteration<N>/` (each pass: `sim/scripts`, `sim/inputs`, `sim/results`, `sim/figures`, `reports`; the last iteration's reports are final) | 5. Verification (`kicad-simulation`) |
 
 The user reads the PDFs; Word is added (`documents=["pdf", "docx"]`) only when
 they ask. Each record's JSON, the source of truth the tools read, is kept apart in

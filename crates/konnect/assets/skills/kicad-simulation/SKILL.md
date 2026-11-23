@@ -100,30 +100,35 @@ paths; never mix scripts, data and charts in one folder):
 ```
 <project>/
   *.kicad_pro / _sch / _pcb
-  design/                  approved specification and part selection (kicad-design-flow)
-  sim/                     the simulation scripts, shared by all iterations
-  sim/inputs/              sourced inputs: fabricator stackup JSON, datasheet values
-  sim/report_sources/      Markdown sources of written reports
-  sim/cycle_log.json       the optimisation cycle's history
-  reports/                 final reports: PDF only
-  iteration1/sim/results/  raw outputs of iteration 1: check JSON, waveforms (CSV/NPZ), logs
-  iteration1/sim/figures/  its charts (PNG)
-  iteration1/reports/      its report: PDF only
-  iteration2/ ...          the next pass, after a design or layout change
+  design/                         approved specification and part selection (kicad-design-flow);
+                                  design/records/cycle_log.json: the optimisation cycle's history
+  iteration1/sim/scripts/         the scripts that produced iteration 1
+  iteration1/sim/inputs/          sourced inputs: fabricator stackup JSON, datasheet values
+  iteration1/sim/results/         raw outputs: check JSON, waveforms (CSV/NPZ), logs
+  iteration1/sim/figures/         its charts (PNG)
+  iteration1/sim/report_sources/  Markdown sources of written reports
+  iteration1/reports/             its reports: PDF only
+  iteration2/ ...                 the next pass, after a design or layout change
 ```
 
 | Folder | Holds |
 |---|---|
-| `sim/` | the scripts, named after the question (`buck_ripple.py`), so the user can re-run them |
-| `iteration<N>/` | everything one evaluation produced; never overwritten by a later one |
-| `reports/` | the final reports people read (the engineering report, the cycle's final report). Word only when the user asks |
+| `iteration<N>/` | everything one evaluation used and produced, scripts and inputs included; never overwritten by a later one |
+| `iteration<N>/sim/scripts/` | the scripts, named after the question (`buck_ripple.py`), so the user can re-run that pass |
+| `iteration<N>/reports/` | the reports people read; the last iteration's are the final ones (the engineering report, the cycle's final report). Word only when the user asks |
+
+Never create a project-level `sim/` or `reports/` folder: a script, input or report
+always belongs to the iteration it was run for.
 
 An iteration is one evaluation of one state of the design. A first verification is
 `iteration1`; each change to the schematic or board followed by a re-run is the next
 iteration (`Folders.next(project)`). Re-running the same state overwrites its own
-iteration only. A script takes the iteration number as an argument and starts with
-`F = Folders.of_script(__file__, iteration).make()`; its outputs go to `F.results`,
-`F.figures` and `F.iteration_reports`.
+iteration only. A script lives in `iteration<N>/sim/scripts/` and starts with
+`F = Folders.of_script(__file__).make()`, which takes the iteration from that folder;
+its outputs go to `F.results`, `F.figures` and `F.iteration_reports`. Start the next
+pass with `Folders.next(project).make().carry_over()`, which copies the previous
+iteration's scripts and inputs, then change the copies, so each iteration keeps the
+exact script that produced it.
 
 - Write SPICE testbenches as plain SPICE text through the package's netlist
   runner, so an engineer can read and re-run them in any SPICE simulator.
@@ -148,7 +153,7 @@ iteration only. A script takes the iteration number as an argument and starts wi
 Use the package's report builder. Each check carries requirement, result,
 status, method, sources, assumptions, what would complete it, and its graphs.
 `Report.write` and `sim_write_report` write one file people read,
-`reports/<name>.pdf`, laid out as:
+`iteration<N>/reports/<name>.pdf`, laid out as:
 
 1. **Summary:** the overall verdict and counts, a table of every check, the
    chart of all checks against their limits, and general notes and assumptions.
@@ -165,10 +170,11 @@ are the defaults for a report in `iteration<N>/reports/`. Add `"docx"` to
 `documents` only when the user asks for Word, and `"md"` only to debug the layout.
 
 A narrative engineering report (design choices, deliverables, results summary,
-recommendations) is written in Markdown to `sim/report_sources/`, with its
-figures linked from `iteration<N>/sim/figures/` by relative path, and rendered into
-`reports/` with `sim_render_document(markdown, out_dir=<project>/reports)`. The
-PDF is the deliverable; the Markdown stays with the simulation files.
+recommendations) is written in Markdown to `iteration<N>/sim/report_sources/`, with
+its figures linked from `iteration<N>/sim/figures/` by relative path, and rendered into
+`iteration<N>/reports/` with
+`sim_render_document(markdown, out_dir=<project>/iteration<N>/reports)`. The PDF is the
+deliverable; the Markdown stays with the simulation files.
 
 Status rules:
 
@@ -307,8 +313,9 @@ skill. It reuses this skill's scripts and report rules.
 1. Never present a number without its method and source.
 2. Never turn an assumed input into a PASS.
 3. Never retype component values; extract them from the design.
-4. Keep scripts, inputs, results, figures and reports in the project's
-   standard folders so results can be reproduced.
+4. Keep scripts, inputs, results, figures and reports in the iteration's
+   standard folders so each pass can be reproduced; nothing in a project-level
+   `sim/` or `reports/`.
 5. Validate every SPICE result against an independent estimate.
 6. Never report a simulation result without its graph; pass `figures_dir` to every
    `sim_*` tool.

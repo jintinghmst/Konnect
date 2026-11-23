@@ -96,6 +96,7 @@ class CycleLog:
         return it
 
     def save(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps({
             "max_iterations": self.max_iterations, "patience": self.patience,
             "min_gain": self.min_gain,

@@ -15,7 +15,7 @@
 | spice | configure ngspice; run a plain-SPICE netlist and get vectors back |
 | netlist | load a schematic's components, values and nets via kicad-cli |
 | units | parse KiCad value text such as "22uF 16V" or "470pF DNP" |
-| report | checks with status, method, sources, assumptions and graphs; one PDF (summary first, then each test with its figures), the checks as JSON in `sim/results/` |
+| report | checks with status, method, sources, assumptions and graphs; one PDF (summary first, then each test with its figures), the checks as JSON in `iteration<N>/sim/results/` |
 | buck | buck design equations, a switched open-loop SPICE testbench (optionally with layout parasitics and an edge-resolved run), and extraction of a buck layout's parasitics |
 | parasitics | the layout as a lumped network: series R and L of the input path, hot loop, SW path, output path (feedback junction to load) and ground return, switch-node copper C, capacitor mounting L; `extract_buck` (or `sim_layout_parasitics`), then `Lumped.apply_plant` into `converter` and `Lumped.apply_testbench` into `buck`; `check_lumping` for the edge-rate limit |
 | layout | read a saved board (read-only): pads, tracks, vias, pours and their fills, stackup; copper path resistance, loop and via inductance, IPC-2221 track width |
@@ -34,7 +34,7 @@
 | budget | output-voltage window at the load: both limits, every contribution |
 | figures | report charts: ripple summary and waveform grids from `converter.snapshot`, metric vs sweep, spectrum vs limit, Bode; embedded through `Report(figures=...)` |
 | document | the report as PDF (default) or Word, text and figures together: `Report.write(..., documents=...)`, `sim_write_report`, `sim_render_document` |
-| project | `Folders`: scripts in `sim/`, `sim/inputs`, `sim/report_sources`, `sim/cycle_log.json`, final `reports/`; per iteration `iteration<N>/sim/results`, `iteration<N>/sim/figures`, `iteration<N>/reports` (PDF only) |
+| project | `Folders`: everything per iteration, `iteration<N>/sim/{scripts,inputs,results,figures,report_sources}` and `iteration<N>/reports` (PDF only); the cycle log in `design/records/cycle_log.json`; `carry_over()` starts a pass from the previous one's scripts and inputs |
 
 ## Coverage of a buck verification
 

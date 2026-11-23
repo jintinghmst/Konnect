@@ -187,11 +187,14 @@ def test_report_in_the_project_folders_links_figures_and_renders_pdf(tmp_path):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from konnect_sim.project import Folders
-    script = tmp_path / "proj" / "sim" / "eval.py"
-    F = Folders.of_script(script, 2).make()
-    assert F.root == tmp_path / "proj" and F.scripts == F.root / "sim" and F.run == "iteration2"
+    script = tmp_path / "proj" / "iteration2" / "sim" / "scripts" / "eval.py"
+    F = Folders.of_script(script).make()
+    assert F.root == tmp_path / "proj" and F.run == "iteration2" and F.scripts == script.parent
     assert F.figures == F.root / "iteration2/sim/figures" and F.iteration_reports.is_dir()
-    assert Folders.of_script(F.root / "sim/scripts/old.py", "it2").root == F.root     # the older layout
+    assert F.reports == F.iteration_reports and F.cycle_log == F.root / "design/records/cycle_log.json"
+    assert not (F.root / "sim").exists() and not (F.root / "reports").exists()  # nothing outside the iteration
+    assert Folders.of_script(F.root / "sim/scripts/old.py", "it2").root == F.root     # the older layouts
+    assert Folders.of_script(F.root / "sim/old.py").iteration == 1
     assert Folders.iterations(F.root) == [2] and Folders.next(F.root).iteration == 3
     fig, ax = plt.subplots(); ax.plot([0, 1]); fig.savefig(F.figures / "a.png"); plt.close(fig)
     c1 = tools.evaluate_check("a", "<= 1", 0.5, 1.0, "max", "m", {"x": {"value": 1, "source": "s"}})
@@ -203,6 +206,11 @@ def test_report_in_the_project_folders_links_figures_and_renders_pdf(tmp_path):
     assert (F.figures / "r_checks_vs_limits.png").is_file()
     with pytest.raises(ValueError):
         Folders(F.root, "baseline")
+    (F.scripts / "eval.py").write_text("x = 1")
+    (F.inputs / "stackup.json").write_text("{}")
+    G = Folders.next(F.root).make().carry_over()                               # the next pass starts from this one
+    assert G.run == "iteration3" and (G.scripts / "eval.py").read_text() == "x = 1"
+    assert (G.inputs / "stackup.json").is_file() and Folders.iterations(F.root) == [2, 3]
     fitz = pytest.importorskip("fitz")
     text = "".join(pg.get_text() for pg in fitz.open(rep["pdf"]))
     # summary first, then the tests, then figures not tied to a test
@@ -327,7 +335,7 @@ def test_every_simulation_tool_draws_its_result(tmp_path):
     titles = [f["title"] for f in rep["figures"]]
     assert titles[0] == "Checks against their limits" and "L: inductance vs current" in titles
     assert rep["ungraphed"] == ["ripple"]
-    assert (tmp_path / "sim/figures/r/r_checks_vs_limits.png").is_file()   # beside the reports folder
+    assert (tmp_path / "reports/r_figures/r_checks_vs_limits.png").is_file()   # outside an iteration
     md = Path(rep["md"]).read_text(encoding="utf-8")
     assert "Checks without a graph of their own: ripple." in md
     # the inductor's checks share one graph: drawn under the first, referred to by number after

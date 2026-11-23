@@ -155,8 +155,9 @@ checks as JSON (for sim_cycle_record) to ``data_dir``: by default
         tool!(
             "sim_render_document",
             r#"Render a Markdown write-up (e.g. the engineering report, kept in
-``<project>/sim/report_sources/``) as a PDF in ``out_dir`` (the project's
-``reports``; default: next to the Markdown), text and images together.
+``<project>/iteration<N>/sim/report_sources/``) as a PDF in ``out_dir``
+(``<project>/iteration<N>/reports``; default: next to the Markdown), text and
+images together.
 Image paths are relative to the Markdown file. ``formats``: ["pdf"]
 (default) and/or "docx"."#,
             json!({"type": "object", "properties": {"markdown": {"type": "string"}, "formats": {"type": "array", "items": {"enum": ["pdf", "docx"]}, "description": "default [\"pdf\"]"}, "out_dir": {"type": "string"}}, "required": ["markdown"]}),

@@ -623,8 +623,9 @@ def write_report(title: str, design: str, checks: list, out_dir: str, stem: str,
 
 def render_document(markdown: str, formats: list | None = None, out_dir: str | None = None) -> dict:
     """Render a Markdown write-up (e.g. the engineering report, kept in
-    ``<project>/sim/report_sources/``) as a PDF in ``out_dir`` (the project's
-    ``reports``; default: next to the Markdown), text and images together.
+    ``<project>/iteration<N>/sim/report_sources/``) as a PDF in ``out_dir``
+    (``<project>/iteration<N>/reports``; default: next to the Markdown), text and
+    images together.
     Image paths are relative to the Markdown file. ``formats``: ["pdf"]
     (default) and/or "docx"."""
     from . import document

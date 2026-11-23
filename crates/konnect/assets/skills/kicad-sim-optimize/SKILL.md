@@ -35,7 +35,7 @@ Stop and report `BLOCKED` naming the missing item if any is absent:
    result: build these with the `kicad-schematic` and `kicad-pcb` skills first.
 2. A specification. Limits the user did not give stay **assumed**; the cycle
    may optimise against them but the final report keeps them assumed.
-3. A per-project simulation script in the project's `sim/` folder that
+3. A per-project simulation script in `iteration<N>/sim/scripts/` that
    follows the script contract below (write it with the `kicad-simulation`
    skill, which defines the project's simulation folders).
 4. KiCad running with the board open in the PCB Editor, reachable over IPC.
@@ -55,9 +55,11 @@ Stop and report `BLOCKED` naming the missing item if any is absent:
 
 The project script runs one full evaluation and records it in the cycle log.
 
-- Arguments: `--iteration <N>` (1 is the baseline; each change is the next number,
-  `Folders.next(project)`), `--change "<what changed>"`, `--drc <error count>`,
-  `--erc <error count>`.
+- Arguments: `--change "<what changed>"`, `--drc <error count>`, `--erc <error count>`.
+  The iteration is the folder the script sits in (`Folders.of_script(__file__)`):
+  1 is the baseline, and each change starts the next with
+  `Folders.next(project).make().carry_over()`, which copies the scripts and inputs
+  forward.
 - It reads the schematic through the package's netlist loader and the saved board
   through its layout loader, extracts the lumped parasitic network
   (`parasitics.extract_buck`, saved to `iteration<N>/sim/results/parasitics.json`),
@@ -72,7 +74,7 @@ The project script runs one full evaluation and records it in the cycle log.
   network (ideal copper), so the report shows what the layout costs.
 - Objectives are elements of the network: `l_hot_h`, `r_out_ohm` + `r_gnd_ohm`,
   `l_mount_cout_h`, `c_sw_f`.
-- It appends the iteration to `sim/cycle_log.json` through the package's
+- It appends the iteration to `design/records/cycle_log.json` (`F.cycle_log`) through the package's
   cycle log, prints the iteration table, and ends with one line:
   `DECISION: <continue|revert|met|stalled|limit> — <reason>`.
 
@@ -153,9 +155,9 @@ act on the decision:
 
 ## Final report
 
-Write it in Markdown to `sim/report_sources/`, embed the final iteration's charts
-from `iteration<N>/sim/figures/`, and render the PDF into `reports/` with `sim_render_document`
-(`out_dir`). It holds:
+Write it in Markdown to the final iteration's `sim/report_sources/`, embed its charts
+from `iteration<N>/sim/figures/`, and render the PDF into that iteration's `reports/`
+with `sim_render_document` (`out_dir`). It holds:
 
 - The iteration table from the cycle log (change, misses, worst margin,
   objectives, DRC, verdict) and the final decision.

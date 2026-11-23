@@ -3,32 +3,37 @@ project reads the same way:
 
     <project>/
       *.kicad_pro / _sch / _pcb
-      design/                    the user-approved specification and part selection (PDF;
-                                 their JSON in design/records/)
-      sim/                       the simulation scripts (re-runnable), shared by all iterations
-      sim/inputs/                sourced inputs: fabricator stackup, values read from datasheets
-      sim/report_sources/        Markdown sources of written reports
-      sim/cycle_log.json         the optimisation cycle's history, across iterations
-      reports/                   the final reports people read (PDF only)
-      iteration1/sim/results/    raw outputs of iteration 1: check JSON, waveforms (CSV/NPZ), logs
-      iteration1/sim/figures/    the charts of iteration 1 (PNG)
-      iteration1/reports/        the report of iteration 1 (PDF only)
-      iteration2/...             the next simulate -> change pass, and so on
+      design/                         the user-approved specification and part selection (PDF;
+                                      their JSON, and the optimisation cycle's log, in design/records/)
+      iteration1/sim/scripts/         the scripts that produced this iteration (re-runnable)
+      iteration1/sim/inputs/          sourced inputs: fabricator stackup, values read from datasheets
+      iteration1/sim/results/         raw outputs: check JSON, waveforms (CSV/NPZ), logs
+      iteration1/sim/figures/         the charts (PNG)
+      iteration1/sim/report_sources/  Markdown sources of written reports
+      iteration1/reports/             the iteration's reports (PDF only); the last iteration's
+                                      reports are the final ones
+      iteration2/...                  the next simulate -> change pass, and so on
 
-A design that is simulated once has only ``iteration1``. A script finds its project from
-its own location and takes the iteration number as an argument:
+There is no project-level ``sim/`` or ``reports/``: everything a pass used or produced is in
+its own iteration folder. A design that is simulated once has only ``iteration1``. A script
+lives in ``iteration<N>/sim/scripts/`` and finds its project and iteration from there:
 
     from konnect_sim.project import Folders
-    F = Folders.of_script(__file__, iteration=2).make()
+    F = Folders.of_script(__file__).make()
     json.dump(rows, open(F.results / "steady_table.json", "w"))
+
+The next pass starts with ``Folders.next(project).make().carry_over()``, which copies the
+previous iteration's scripts and inputs so it can be changed without touching the old one.
 """
 from __future__ import annotations
 
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 _ITERATION = re.compile(r"(?:iteration|it)?(\d+)$")
+_ITERATION_DIR = re.compile(r"iteration(\d+)")
 
 
 def iteration_number(x: int | str) -> int:
@@ -49,11 +54,17 @@ class Folders:
         object.__setattr__(self, "iteration", iteration_number(self.iteration))
 
     @classmethod
-    def of_script(cls, script: str | Path, iteration: int | str = 1) -> "Folders":
-        """For a script in ``<project>/sim/`` (or the older ``<project>/sim/scripts/``)."""
+    def of_script(cls, script: str | Path, iteration: int | str | None = None) -> "Folders":
+        """For a script in ``<project>/iteration<N>/sim/scripts/``; the iteration is that
+        folder's unless given. The older ``<project>/sim/`` and ``<project>/sim/scripts/``
+        still resolve to the project (iteration 1 unless given)."""
         here = Path(script).resolve().parent
+        if (here.name == "scripts" and here.parent.name == "sim"
+                and _ITERATION_DIR.fullmatch(here.parents[1].name)):
+            folder = int(_ITERATION_DIR.fullmatch(here.parents[1].name).group(1))
+            return cls(here.parents[2], folder if iteration is None else iteration)
         root = here.parents[1] if here.name == "scripts" and here.parent.name == "sim" else here.parent
-        return cls(root, iteration)
+        return cls(root, 1 if iteration is None else iteration)
 
     @staticmethod
     def iterations(root: str | Path) -> list[int]:
@@ -82,35 +93,14 @@ class Folders:
         """The iteration's name, ``iteration<N>``; also its folder name."""
         return f"iteration{self.iteration}"
 
-    # shared by all iterations
-    @property
-    def sim(self) -> Path:
-        return self.root / "sim"
-
-    @property
-    def scripts(self) -> Path:
-        return self.sim
-
-    @property
-    def inputs(self) -> Path:
-        return self.sim / "inputs"
-
-    @property
-    def report_sources(self) -> Path:
-        return self.sim / "report_sources"
-
-    @property
-    def cycle_log(self) -> Path:
-        return self.sim / "cycle_log.json"
-
-    @property
-    def reports(self) -> Path:
-        """Final reports (the engineering report, the cycle's final report)."""
-        return self.root / "reports"
-
     @property
     def design(self) -> Path:
         return self.root / "design"
+
+    @property
+    def cycle_log(self) -> Path:
+        """The optimisation cycle's history, across iterations."""
+        return self.design / "records" / "cycle_log.json"
 
     # this iteration
     @property
@@ -118,31 +108,64 @@ class Folders:
         return self.root / self.run
 
     @property
+    def sim(self) -> Path:
+        return self.iteration_dir / "sim"
+
+    @property
+    def scripts(self) -> Path:
+        return self.sim / "scripts"
+
+    @property
+    def inputs(self) -> Path:
+        return self.sim / "inputs"
+
+    @property
     def results(self) -> Path:
-        return self.iteration_dir / "sim" / "results"
+        return self.sim / "results"
 
     @property
     def figures(self) -> Path:
-        return self.iteration_dir / "sim" / "figures"
+        return self.sim / "figures"
+
+    @property
+    def report_sources(self) -> Path:
+        return self.sim / "report_sources"
 
     @property
     def iteration_reports(self) -> Path:
         return self.iteration_dir / "reports"
 
+    @property
+    def reports(self) -> Path:
+        """Where this iteration's reports go; the last iteration's are the final ones."""
+        return self.iteration_reports
+
     def make(self) -> "Folders":
-        for p in (self.sim, self.reports, self.results, self.figures, self.iteration_reports):
+        for p in (self.scripts, self.inputs, self.results, self.figures, self.iteration_reports):
             p.mkdir(parents=True, exist_ok=True)
+        return self
+
+    def carry_over(self) -> "Folders":
+        """Copy the previous iteration's scripts and inputs into this one (files already here
+        are kept), so the new pass starts from what the last one ran."""
+        if self.iteration > 1:
+            prev = Folders(self.root, self.iteration - 1)
+            for src, dst in ((prev.scripts, self.scripts), (prev.inputs, self.inputs)):
+                if not src.is_dir():
+                    continue
+                for f in src.rglob("*"):
+                    out = dst / f.relative_to(src)
+                    if f.is_file() and "__pycache__" not in f.parts and not out.exists():
+                        out.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(f, out)
         return self
 
 
 def report_dirs(folder: Path, stem: str) -> tuple[Path, Path]:
     """Where a report written to ``folder`` keeps its charts and its data (JSON):
     ``iteration<N>/sim/figures`` and ``/results`` for ``iteration<N>/reports``;
-    ``sim/figures/<stem>`` and ``sim/results/<stem>`` for the project's ``reports``;
-    ``<stem>_figures`` and ``<stem>_data`` beside any other folder."""
+    ``<stem>_figures`` and ``<stem>_data`` inside any other folder."""
     folder = Path(folder)
     if folder.name == "reports" and re.fullmatch(r"iteration\d+", folder.parent.name):
         return folder.parent / "sim" / "figures", folder.parent / "sim" / "results"
-    if folder.name == "reports":
-        return folder.parent / "sim" / "figures" / stem, folder.parent / "sim" / "results" / stem
     return folder / f"{stem}_figures", folder / f"{stem}_data"

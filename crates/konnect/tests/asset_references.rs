@@ -791,6 +791,7 @@ fn backticked_tool_names_in_prose_exist_in_the_registry() {
         "r_out_ohm",
         "r_gnd_ohm",
         "l_mount_cout_h",
+        "carry_over",
         "c_sw_f",
     ];
 

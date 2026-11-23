@@ -512,7 +512,7 @@ the router or relying on the KiCad ActionPlugin workflow.
 | `sim_corner_sweep` | Worst case of each metric over tolerance spreads. |
 | `sim_evaluate_check` | Apply the evidence rule to any comparison: `inputs` {name: number or {value, source}}; PASS/FAIL only when every input is sourced. |
 | `sim_write_report` | Write the report of check dicts (as returned by the other tools) as one PDF: overall verdict, check table and the chart of checks against their limits first, then one section per check with its method, sources, assumptions and graphs. |
-| `sim_render_document` | Render a Markdown write-up (e.g. the engineering report, kept in `sim/report_sources/`) as a PDF in `reports/`, text and images together. |
+| `sim_render_document` | Render a Markdown write-up (e.g. the engineering report, kept in `iteration<N>/sim/report_sources/`) as a PDF in `iteration<N>/reports/`, text and images together. |
 | `sim_cycle_record` | Record one simulate -> change iteration (a report written by write_report or an evaluation script) and return the cycle's decision: continue / revert / met / stalled / limit. |
 | `sim_layout_calc` | Closed-form layout physics, with the formula named in the answer. |
 | `sim_layout_parasitics` | Lumped copper parasitics of a buck layout (series R/L of each power branch, switch-node C, capacitor mounting L) for its simulations. |
